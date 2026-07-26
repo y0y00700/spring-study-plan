@@ -1,7 +1,7 @@
 ---
 date: 2026-07-24
 topic: 생성자 주입과 동일 타입 Bean 선택 규칙
-processed: false
+processed: true
 ---
 
 # 생성자 주입과 Spring Bean 선택 규칙
@@ -83,3 +83,35 @@ processed: false
 ```text
 Expected :NAVER
 Actual   :KAKAO
+```
+
+고의 실패를 확인한 뒤 정상 검증문 `assertEquals("KAKAO", orderService.pay())`만 남겼다.
+
+### usesProcessorProvidedAtConstructionTime
+
+- 카카오와 네이버 구현체를 각각 다른 `OrderService` 생성자에 전달했다.
+- 각 서비스는 주입받은 구현체에 따라 `"KAKAO"`, `"NAVER"`를 반환했다.
+
+## 동일 타입 Bean 선택 실험
+
+테스트 파일:
+
+`labs/spring-lab/src/test/java/study/constructorinjection/SpringBeanSelectionTest.java`
+
+- 선택 규칙 없이 `PaymentProcessor` Bean이 둘이면 `OrderService` 의존성 연결이 실패했다.
+- 실패 원인은 `NoUniqueBeanDefinitionException`이었다.
+- 카카오 Bean에 `@Primary`를 지정하면 카카오 구현체가 주입됐다.
+- 카카오 Bean이 `@Primary`여도 주입 지점에 `@Qualifier("naverProcessor")`를 지정하면 네이버 구현체가 주입됐다.
+
+## 정리된 이해
+
+- 생성자에 전달되는 것은 객체 자체를 복제한 값이 아니라 객체를 가리키는 참조 값이다.
+- 전달 후 원래 지역변수를 재대입해도 이미 필드에 저장된 참조에는 영향을 주지 않는다.
+- 인터페이스는 사용할 수 있는 계약을 제한하고, 생성자 주입은 외부에서 선택한 구현체의 참조를 전달한다.
+- Spring은 타입으로 후보를 찾은 뒤 선택 규칙을 적용한다.
+- `@Primary`는 기본 우선 후보이고, 주입 지점의 `@Qualifier`는 특정 후보를 명시하므로 우선한다.
+
+## 검증
+
+- 2026-07-26 최초 전체 테스트: 7개 실행, 고의 실패 assertion 1개 실패
+- 고의 실패 assertion 제거 후 전체 테스트 성공: 7개 실행, 실패 0개

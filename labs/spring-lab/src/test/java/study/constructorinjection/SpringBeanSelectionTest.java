@@ -29,10 +29,10 @@ class SpringBeanSelectionTest {
 
     @Test
     void injectsPrimaryProcessorWhenMultipleCandidatesExist() {
-        try (AnnotationConfigApplicationContext context2 =
+        try (AnnotationConfigApplicationContext context =
                      new AnnotationConfigApplicationContext(PrimaryPaymentBeanConfig.class)) {
 
-            OrderService orderService = context2.getBean(OrderService.class);
+            OrderService orderService = context.getBean(OrderService.class);
 
             // pay() 결과가 KAKAO인지 직접 검증
             assertEquals("KAKAO",orderService.pay());
@@ -48,6 +48,24 @@ class SpringBeanSelectionTest {
             // NAVER를 검증
             assertEquals("NAVER",orderService.pay());
         }
+    }
+    @Test
+    void doesNotInstantiateLazyCandidatesBeforeAmbiguityIsDetected(){
+        LazyPaymentBeanConfig.processorCreationCount = 0;
+
+        UnsatisfiedDependencyException exception = assertThrows(
+                UnsatisfiedDependencyException.class,
+                () -> new AnnotationConfigApplicationContext(
+                        LazyPaymentBeanConfig.class
+                )
+        );
+
+        assertInstanceOf(
+                NoUniqueBeanDefinitionException.class,
+                exception.getCause()
+        );
+
+        assertEquals(0, LazyPaymentBeanConfig.processorCreationCount);
     }
 
 }
