@@ -1,14 +1,14 @@
 # Current Learning Context
 
-마지막 갱신일: 2026-07-26
+마지막 갱신일: 2026-07-27
 
 ## 현재 단계
 
-Spring 컨테이너 기초 진행 중 — Bean 정의와 객체 생성을 구분하고, `ApplicationContext`와 내부 `BeanFactory`의 역할을 최소 재현 실험으로 검증한 단계
+Spring 컨테이너 기초 진행 중 — annotation 조회와 메서드 호출을 분리하고, 생성자 매개변수 타입을 바탕으로 의존 객체를 먼저 준비하는 흐름을 최소 재현 실험으로 검증한 단계
 
 ## 현재 주제
 
-Bean 정의 기반 의존성 후보 탐색과 `ApplicationContext`·`BeanFactory`의 역할
+Reflection의 annotation 조회·메서드 호출과 BeanFactory의 생성자 의존성 해결 순서
 
 ## 설명할 수 있게 된 것
 
@@ -29,11 +29,18 @@ Bean 정의 기반 의존성 후보 탐색과 `ApplicationContext`·`BeanFactory
 - annotation은 메타데이터이며 스스로 코드를 실행하지 않는다.
 - 컴파일러, annotation processor, Spring 같은 처리 주체가 annotation을 읽고 해석해야 동작이 발생한다.
 - Reflection은 실행 중 클래스 구조와 annotation 정보를 조사하는 기능이며, 조사만으로 대상 메서드가 실행되지는 않는다.
+- `Method.isAnnotationPresent()`는 해당 `Method`가 나타내는 메서드에 지정 annotation이 있는지 확인할 뿐, 메서드 본문을 실행하지 않는다.
+- `Method.invoke(target)`는 annotation 존재 여부와 독립적으로 `target` 객체의 대상 메서드를 실제 호출한다.
+- `@Retention(RUNTIME)` annotation은 실행 중 Reflection으로 조회할 수 있지만, `CLASS` annotation은 `.class` 파일에 남아도 일반적인 실행 중 Reflection 조회 결과에는 나타나지 않는다.
+- annotation은 동작을 지시하는 메타데이터이며, Spring 같은 처리 주체가 이를 읽고 해석하여 Bean 정의 등록·객체 생성 같은 실제 동작을 수행한다.
+- Spring의 모든 메타데이터 탐색이 Java Reflection인 것은 아니며, 클래스패스 탐색 과정에서는 `.class` 메타데이터를 직접 읽을 수도 있다.
+- BeanFactory는 의존 객체를 필요로 하는 생성자를 호출하기 전에 생성자 매개변수 타입을 확인하고 후보 Bean 정의를 검색한다.
+- 후보 Singleton 객체가 이미 있으면 조회하고, 없으면 먼저 생성한 뒤 그 객체 참조를 생성자 인자로 전달한다.
+- Reflection으로 `OrderService` 생성자의 매개변수 타입이 `PaymentProcessor`임을 확인했고, 실제 Spring 컨텍스트에서 `PaymentProcessor 생성 → OrderService 생성` 순서를 검증했다.
 
 ## 아직 실험으로 검증하지 못한 것
 
-- `isAnnotationPresent()`가 annotation 존재 여부만 반환하고 대상 메서드는 실행하지 않는지
-- Spring이 Reflection으로 얻은 생성자·매개변수 정보를 Bean 생성 및 의존성 연결에 사용하는 구체적인 흐름
+- Spring 내부에서 생성자 선택·매개변수 의존성 해결·생성자 호출을 담당하는 실제 클래스와 메서드
 - 요청이 Controller까지 도착하는 전체 과정
 - Bean 생성 이후 초기화 콜백과 BeanPostProcessor가 실행되는 구체적인 순서
 - Spring 프록시와 `@Transactional`의 동작 원리
@@ -43,21 +50,21 @@ Bean 정의 기반 의존성 후보 탐색과 `ApplicationContext`·`BeanFactory
 ## 현재 실습 환경
 
 - `labs/spring-lab`: Java 17, Spring Boot 4.1.0, Gradle Wrapper 9.5.1
-- 2026-07-26 전체 테스트 성공: 9개 실행, 실패 0개
-- 생성자에 전달된 참조 유지, 구현체 교체, 동일 타입 후보 충돌, `@Primary`, `@Qualifier`, `@Lazy` 후보의 생성 시점, `ApplicationContext`와 내부 `BeanFactory`의 Singleton 조회를 검증한다.
+- 2026-07-27 전체 테스트 성공: 12개 실행, 실패 0개
+- 기존 컨테이너 실험에 더해 annotation 보존 정책별 Reflection 조회, `Method.invoke()`의 독립적인 실행, 생성자 매개변수 타입 조회와 의존 객체 우선 생성 순서를 검증한다.
 
 ## 다음 행동
 
-1. annotation은 메타데이터이고 처리 주체가 동작을 만든다는 내용을 회상한다.
-2. annotation 존재 확인과 대상 메서드 실행을 분리한 최소 Reflection 테스트를 수행한다.
-3. Reflection으로 얻은 생성자·매개변수 정보가 Bean 정의와 의존성 해결로 이어지는 흐름을 단계별로 설명한다.
+1. `Method.isAnnotationPresent()`의 조회 대상과 `Method.invoke()`의 실행 효과를 회상한다.
+2. BeanFactory가 생성자 호출 전에 후보 Bean 정의를 검색하고 의존 객체를 준비하는 순서를 회상한다.
+3. Bean 생성 이후 초기화 콜백과 BeanPostProcessor의 실행 순서를 예측하고 최소 실험으로 검증한다.
 
 ## 다음 세션 시작 요청
 
 ```text
 AGENTS.md와 CURRENT.md를 읽고,
-annotation 존재 확인과 대상 메서드 실행이 왜 별개의 동작인지
-내가 먼저 설명하게 한 뒤 최소 Reflection 실험을 진행해 줘.
-테스트 보일러플레이트는 제공하고 개념을 검증하는 예측과 assertion에 집중시켜 줘.
-내가 답하기 전에는 정답이나 완성 코드를 말하지 마.
+오늘 검증한 annotation 조회·Method.invoke·생성자 의존성 해결 순서를 먼저 회상시켜 줘.
+그 다음 Bean 생성 이후 초기화 콜백과 BeanPostProcessor의 실행 순서를
+내가 먼저 예측하게 한 뒤 최소 실험으로 진행해 줘.
+테스트 보일러플레이트는 제공하고 실행 순서 예측과 assertion에 집중시켜 줘.
 ```
