@@ -16,6 +16,7 @@ Spring 학습 준비 및 기초 진단
 
 - [현재 학습 컨텍스트](CURRENT.md)
 - [8주 학습 로드맵](ROADMAP.md)
+- [세션별 상세 로드맵](ROADMAP_DETAIL.md)
 - [기초 진단](curriculum/00-diagnostic.md)
 - [도서 학습 계획](book/spring-textbook/reading-plan.md)
 - [해결되지 않은 질문](questions/unresolved.md)

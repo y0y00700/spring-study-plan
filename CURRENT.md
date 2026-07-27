@@ -10,6 +10,13 @@ Spring 컨테이너 기초 진행 중 — Bean 인스턴스화와 초기화를 �
 
 Spring Bean 초기화 생명주기와 BeanPostProcessor
 
+## 로드맵 진행 위치
+
+- 상세 기준: `ROADMAP_DETAIL.md`
+- 최근 완료 항목: `CON-06 Bean 초기화와 BeanPostProcessor`
+- 다음 진행 항목: `CON-07 Component Scan`
+- 진행 순서: `CON` 완료 후 `WEB → MVC → AOP/TX → JPA → TST/OPS → CAP`
+
 ## 설명할 수 있게 된 것
 
 - 인터페이스 타입으로 선언하는 것만으로는 생성 책임이 분리되지 않는다.
@@ -48,6 +55,9 @@ Spring Bean 초기화 생명주기와 BeanPostProcessor
 
 - Spring 내부에서 생성자 선택·매개변수 의존성 해결·생성자 호출을 담당하는 실제 클래스와 메서드
 - 요청이 Controller까지 도착하는 전체 과정
+- Component Scan의 탐색 범위와 BeanDefinition 등록 과정
+- `@Configuration` 설정 클래스 프록시와 `@Bean` 메서드 호출
+- 소멸 콜백과 Scope별 컨테이너 책임
 - Spring 프록시와 `@Transactional`의 동작 원리
 - JPA, Hibernate, Spring Data JPA의 역할 차이
 - 영속성 컨텍스트와 flush 시점
@@ -62,16 +72,20 @@ Spring Bean 초기화 생명주기와 BeanPostProcessor
 
 1. 인스턴스화와 초기화의 차이 및 여섯 생명주기 이벤트의 순서를 회상한다.
 2. BeanPostProcessor가 원본 대신 다른 객체를 반환했을 때 컨텍스트 조회 결과가 달라지는 이유를 설명한다.
-3. 이 흐름을 바탕으로 Spring 프록시의 호출 경계를 예측하고 최소 실험으로 검증한다.
+3. `CON-07 Component Scan`에서 scan 범위 안팎의 클래스가 BeanDefinition으로 등록되는 결과를 예측하고 최소 실험으로 검증한다.
 
 ## 다음 세션 시작 요청
 
 ```text
-AGENTS.md와 CURRENT.md를 읽고,
+AGENTS.md, ROADMAP_DETAIL.md, CURRENT.md를 모두 읽고,
+현재 roadmap item, 선수 항목, 오늘의 핵심 개념,
+최소 실험과 완료 기준을 먼저 알려 줘.
 오늘 검증한 Bean 인스턴스화·초기화의 차이와
 constructor부터 BeanPostProcessor after까지의 실행 순서를 먼저 회상시켜 줘.
 그 다음 BeanPostProcessor가 원본 대신 프록시를 반환했을 때
 컨텍스트가 어떤 객체를 공개하는지 내가 설명하게 해 줘.
-회상이 끝나면 Spring 프록시의 호출 경계를 내가 먼저 예측하게 한 뒤 최소 실험으로 진행해 줘.
+회상이 끝나면 `CON-07 Component Scan`을 진행하되,
+scan 범위 안팎의 Bean 등록 결과를 내가 먼저 예측하게 해 줘.
+문서에 지정되지 않은 다음 주제를 임의로 추가하지 마.
 테스트 보일러플레이트는 제공하고 실행 순서 예측과 assertion에 집중시켜 줘.
 ```
