@@ -1,7 +1,7 @@
 ---
 date: 2026-07-27
 topic: Spring Bean 초기화 생명주기와 BeanPostProcessor
-processed: false
+processed: true
 environment: company-pc
 ---
 
@@ -87,3 +87,23 @@ constructor
 → postConstruct
 → afterPropertiesSet
 → afterInitialization
+```
+
+## 두 번째 실험
+
+### 테스트
+
+`postProcessorReturnValueBecomesBeanExposedByContext`
+
+### 검증한 내용
+
+- `postProcessAfterInitialization()`이 원본 `GreetingService` 대신 `GreetingServiceProxy`를 반환한다.
+- 컨텍스트에서 이름으로 조회한 객체는 원본 객체와 동일하지 않다.
+- 조회 결과는 `GreetingServiceProxy` 타입이다.
+- 프록시의 `greet()` 호출은 대상 객체에 위임되어 `"proxy -> target"`을 반환한다.
+
+## 집 PC 정리 및 검증
+
+- 2026-07-28 `.\gradlew.bat test`를 실행했다.
+- 전체 테스트 14개가 실행됐고 실패, 오류, 건너뜀 없이 모두 성공했다.
+- `BeanLifecycleOrderTest`의 두 테스트가 모두 성공한 뒤 `processed`를 `true`로 변경했다.

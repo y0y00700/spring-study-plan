@@ -1,14 +1,14 @@
 # Current Learning Context
 
-마지막 갱신일: 2026-07-27
+마지막 갱신일: 2026-07-28
 
 ## 현재 단계
 
-Spring 컨테이너 기초 진행 중 — annotation 조회와 메서드 호출을 분리하고, 생성자 매개변수 타입을 바탕으로 의존 객체를 먼저 준비하는 흐름을 최소 재현 실험으로 검증한 단계
+Spring 컨테이너 기초 진행 중 — Bean 인스턴스화와 초기화를 구분하고, 초기화 콜백 전후의 BeanPostProcessor 실행 및 반환 객체 공개 흐름을 최소 재현 실험으로 검증한 단계
 
 ## 현재 주제
 
-Reflection의 annotation 조회·메서드 호출과 BeanFactory의 생성자 의존성 해결 순서
+Spring Bean 초기화 생명주기와 BeanPostProcessor
 
 ## 설명할 수 있게 된 것
 
@@ -37,12 +37,17 @@ Reflection의 annotation 조회·메서드 호출과 BeanFactory의 생성자 �
 - BeanFactory는 의존 객체를 필요로 하는 생성자를 호출하기 전에 생성자 매개변수 타입을 확인하고 후보 Bean 정의를 검색한다.
 - 후보 Singleton 객체가 이미 있으면 조회하고, 없으면 먼저 생성한 뒤 그 객체 참조를 생성자 인자로 전달한다.
 - Reflection으로 `OrderService` 생성자의 매개변수 타입이 `PaymentProcessor`임을 확인했고, 실제 Spring 컨텍스트에서 `PaymentProcessor 생성 → OrderService 생성` 순서를 검증했다.
+- 인스턴스화는 생성자를 호출해 객체를 만드는 단계이고, 초기화는 객체 생성과 의존관계·컨테이너 정보 설정 후 준비 작업을 수행하는 단계다.
+- `@PostConstruct`는 생성자 기능이 아니라 Spring의 후처리기가 annotation을 찾아 호출하는 초기화 콜백이다.
+- 현재 실험에서는 `constructor → setBeanName → BeanPostProcessor before → @PostConstruct → afterPropertiesSet → BeanPostProcessor after` 순서로 실행됐다.
+- `@PostConstruct`와 `InitializingBean.afterPropertiesSet()`을 함께 사용하면 현재 Spring 환경에서는 `@PostConstruct`가 먼저 호출된다.
+- `BeanPostProcessor`는 개별 Bean 내부가 아니라 컨테이너 차원에서 여러 Bean의 초기화 전후를 가공하는 확장 지점이다.
+- `postProcessAfterInitialization()`이 원본 대신 프록시를 반환하면 컨텍스트 조회 결과는 원본이 아니라 그 프록시가 되며, 프록시가 대상 객체 호출을 위임할 수 있다.
 
 ## 아직 실험으로 검증하지 못한 것
 
 - Spring 내부에서 생성자 선택·매개변수 의존성 해결·생성자 호출을 담당하는 실제 클래스와 메서드
 - 요청이 Controller까지 도착하는 전체 과정
-- Bean 생성 이후 초기화 콜백과 BeanPostProcessor가 실행되는 구체적인 순서
 - Spring 프록시와 `@Transactional`의 동작 원리
 - JPA, Hibernate, Spring Data JPA의 역할 차이
 - 영속성 컨텍스트와 flush 시점
@@ -50,21 +55,23 @@ Reflection의 annotation 조회·메서드 호출과 BeanFactory의 생성자 �
 ## 현재 실습 환경
 
 - `labs/spring-lab`: Java 17, Spring Boot 4.1.0, Gradle Wrapper 9.5.1
-- 2026-07-27 전체 테스트 성공: 12개 실행, 실패 0개
-- 기존 컨테이너 실험에 더해 annotation 보존 정책별 Reflection 조회, `Method.invoke()`의 독립적인 실행, 생성자 매개변수 타입 조회와 의존 객체 우선 생성 순서를 검증한다.
+- 2026-07-28 전체 테스트 성공: 14개 실행, 실패 0개
+- 기존 컨테이너 실험에 더해 Bean 인스턴스화·Aware 콜백·초기화 콜백·BeanPostProcessor의 실행 순서와 후처리기가 반환한 프록시의 공개를 검증한다.
 
 ## 다음 행동
 
-1. `Method.isAnnotationPresent()`의 조회 대상과 `Method.invoke()`의 실행 효과를 회상한다.
-2. BeanFactory가 생성자 호출 전에 후보 Bean 정의를 검색하고 의존 객체를 준비하는 순서를 회상한다.
-3. Bean 생성 이후 초기화 콜백과 BeanPostProcessor의 실행 순서를 예측하고 최소 실험으로 검증한다.
+1. 인스턴스화와 초기화의 차이 및 여섯 생명주기 이벤트의 순서를 회상한다.
+2. BeanPostProcessor가 원본 대신 다른 객체를 반환했을 때 컨텍스트 조회 결과가 달라지는 이유를 설명한다.
+3. 이 흐름을 바탕으로 Spring 프록시의 호출 경계를 예측하고 최소 실험으로 검증한다.
 
 ## 다음 세션 시작 요청
 
 ```text
 AGENTS.md와 CURRENT.md를 읽고,
-오늘 검증한 annotation 조회·Method.invoke·생성자 의존성 해결 순서를 먼저 회상시켜 줘.
-그 다음 Bean 생성 이후 초기화 콜백과 BeanPostProcessor의 실행 순서를
-내가 먼저 예측하게 한 뒤 최소 실험으로 진행해 줘.
+오늘 검증한 Bean 인스턴스화·초기화의 차이와
+constructor부터 BeanPostProcessor after까지의 실행 순서를 먼저 회상시켜 줘.
+그 다음 BeanPostProcessor가 원본 대신 프록시를 반환했을 때
+컨텍스트가 어떤 객체를 공개하는지 내가 설명하게 해 줘.
+회상이 끝나면 Spring 프록시의 호출 경계를 내가 먼저 예측하게 한 뒤 최소 실험으로 진행해 줘.
 테스트 보일러플레이트는 제공하고 실행 순서 예측과 assertion에 집중시켜 줘.
 ```
