@@ -1,20 +1,20 @@
 # Current Learning Context
 
-마지막 갱신일: 2026-07-28
+마지막 갱신일: 2026-07-29
 
 ## 현재 단계
 
-Spring 컨테이너 기초 진행 중 — Bean 인스턴스화와 초기화를 구분하고, 초기화 콜백 전후의 BeanPostProcessor 실행 및 반환 객체 공개 흐름을 최소 재현 실험으로 검증한 단계
+Spring 컨테이너 기초 진행 중 — `@Configuration` 설정 클래스 프록시가 `@Bean` 메서드 간 직접 호출을 가로채 BeanFactory의 관리 객체를 반환하는 흐름을 최소 재현 실험으로 검증한 단계
 
 ## 현재 주제
 
-Spring Bean 초기화 생명주기와 BeanPostProcessor
+`@Configuration`과 `@Bean` 프록시
 
 ## 로드맵 진행 위치
 
 - 상세 기준: `ROADMAP_DETAIL.md`
-- 최근 완료 항목: `CON-06 Bean 초기화와 BeanPostProcessor`
-- 다음 진행 항목: `CON-07 Component Scan`
+- 최근 완료 항목: `CON-08 @Configuration과 @Bean 프록시`
+- 다음 진행 항목: `CON-09 소멸 콜백과 Scope`
 - 진행 순서: `CON` 완료 후 `WEB → MVC → AOP/TX → JPA → TST/OPS → CAP`
 
 ## 설명할 수 있게 된 것
@@ -50,13 +50,22 @@ Spring Bean 초기화 생명주기와 BeanPostProcessor
 - `@PostConstruct`와 `InitializingBean.afterPropertiesSet()`을 함께 사용하면 현재 Spring 환경에서는 `@PostConstruct`가 먼저 호출된다.
 - `BeanPostProcessor`는 개별 Bean 내부가 아니라 컨테이너 차원에서 여러 Bean의 초기화 전후를 가공하는 확장 지점이다.
 - `postProcessAfterInitialization()`이 원본 대신 프록시를 반환하면 컨텍스트 조회 결과는 원본이 아니라 그 프록시가 되며, 프록시가 대상 객체 호출을 위임할 수 있다.
+- `@SpringBootApplication`은 `@ComponentScan`을 포함하며, 별도 base package 지정이 없으면 애플리케이션 클래스의 패키지와 하위 패키지를 탐색한다.
+- `@Component`는 스스로 Bean을 등록하지 않으며, 스캐너가 탐색 범위 안의 클래스 메타데이터를 읽고 후보로 판단해야 BeanDefinition이 등록된다.
+- Component Scan은 먼저 base package로 탐색 범위를 정하고, 그 범위 안의 클래스에 기본·include·exclude filter를 적용한다.
+- include filter는 base package 밖으로 탐색 범위를 확장하지 않고, exclude filter와 일치한 클래스는 Bean 후보에서 제외한다.
+- 스캔 과정의 BeanDefinition 등록과 실제 Bean 인스턴스 생성은 별개 단계다.
+- `lazyInit`은 BeanDefinition 등록 여부가 아니라 Singleton 인스턴스 생성 시점을 변경한다.
+- `proxyBeanMethods = true`이면 Spring이 설정 클래스를 프록시로 확장하고, `@Bean` 메서드 간 직접 호출을 가로채 BeanFactory가 관리하는 객체를 반환한다.
+- 설정 클래스 프록시는 `@Bean` 메서드 호출을 막는 것이 아니라 가로채며, 대상 Bean의 Singleton·Prototype 같은 Scope 규칙을 적용한다.
+- `proxyBeanMethods = false`이면 `@Bean` 메서드 간 직접 호출은 일반 Java 호출이므로 메서드 본문의 `new`가 다시 실행될 수 있다.
+- `proxyBeanMethods = false`여도 `@Bean` 분석과 BeanDefinition 등록, BeanFactory의 의존성 검색·객체 생성·저장·조회는 계속 동작한다.
+- `@Bean` 메서드의 의존성을 다른 `@Bean` 메서드 직접 호출 대신 메서드 매개변수로 받으면, BeanFactory가 관리 객체를 전달하므로 설정 클래스 프록시 없이도 중복 생성을 피할 수 있다.
 
 ## 아직 실험으로 검증하지 못한 것
 
 - Spring 내부에서 생성자 선택·매개변수 의존성 해결·생성자 호출을 담당하는 실제 클래스와 메서드
 - 요청이 Controller까지 도착하는 전체 과정
-- Component Scan의 탐색 범위와 BeanDefinition 등록 과정
-- `@Configuration` 설정 클래스 프록시와 `@Bean` 메서드 호출
 - 소멸 콜백과 Scope별 컨테이너 책임
 - Spring 프록시와 `@Transactional`의 동작 원리
 - JPA, Hibernate, Spring Data JPA의 역할 차이
@@ -65,14 +74,14 @@ Spring Bean 초기화 생명주기와 BeanPostProcessor
 ## 현재 실습 환경
 
 - `labs/spring-lab`: Java 17, Spring Boot 4.1.0, Gradle Wrapper 9.5.1
-- 2026-07-28 전체 테스트 성공: 14개 실행, 실패 0개
-- 기존 컨테이너 실험에 더해 Bean 인스턴스화·Aware 콜백·초기화 콜백·BeanPostProcessor의 실행 순서와 후처리기가 반환한 프록시의 공개를 검증한다.
+- 2026-07-29 전체 테스트 성공: 18개 실행, 실패 0개
+- 기존 컨테이너 실험에 더해 `proxyBeanMethods` 설정과 `@Bean` 의존성 연결 방식에 따른 객체 동일성 및 생성 횟수를 검증한다.
 
 ## 다음 행동
 
-1. 인스턴스화와 초기화의 차이 및 여섯 생명주기 이벤트의 순서를 회상한다.
-2. BeanPostProcessor가 원본 대신 다른 객체를 반환했을 때 컨텍스트 조회 결과가 달라지는 이유를 설명한다.
-3. `CON-07 Component Scan`에서 scan 범위 안팎의 클래스가 BeanDefinition으로 등록되는 결과를 예측하고 최소 실험으로 검증한다.
+1. 설정 클래스 프록시가 `@Bean` 메서드 간 직접 호출을 처리하는 경로를 회상한다.
+2. `proxyBeanMethods = false`에서도 메서드 매개변수 주입으로 관리 객체를 받을 수 있는 이유를 설명한다.
+3. `CON-09 소멸 콜백과 Scope`에서 컨텍스트 종료 시 Singleton과 Prototype Bean의 소멸 콜백 결과를 예측하고 최소 실험으로 검증한다.
 
 ## 다음 세션 시작 요청
 
@@ -80,12 +89,11 @@ Spring Bean 초기화 생명주기와 BeanPostProcessor
 AGENTS.md, ROADMAP_DETAIL.md, CURRENT.md를 모두 읽고,
 현재 roadmap item, 선수 항목, 오늘의 핵심 개념,
 최소 실험과 완료 기준을 먼저 알려 줘.
-오늘 검증한 Bean 인스턴스화·초기화의 차이와
-constructor부터 BeanPostProcessor after까지의 실행 순서를 먼저 회상시켜 줘.
-그 다음 BeanPostProcessor가 원본 대신 프록시를 반환했을 때
-컨텍스트가 어떤 객체를 공개하는지 내가 설명하게 해 줘.
-회상이 끝나면 `CON-07 Component Scan`을 진행하되,
-scan 범위 안팎의 Bean 등록 결과를 내가 먼저 예측하게 해 줘.
+오늘 검증한 설정 클래스 프록시의 `@Bean` 메서드 호출 경로를 먼저 회상시켜 줘.
+그 다음 `proxyBeanMethods=false`에서 직접 호출과
+메서드 매개변수 주입의 결과가 다른 이유를 내가 설명하게 해 줘.
+회상이 끝나면 `CON-09 소멸 콜백과 Scope`를 진행하되,
+컨텍스트 종료 시 Singleton과 Prototype Bean의 소멸 콜백 결과를 내가 먼저 예측하게 해 줘.
 문서에 지정되지 않은 다음 주제를 임의로 추가하지 마.
 테스트 보일러플레이트는 제공하고 실행 순서 예측과 assertion에 집중시켜 줘.
 ```

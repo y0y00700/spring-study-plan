@@ -2,9 +2,9 @@
 date: 2026-07-28
 environment: company_pc
 roadmap_item: CON-07 Component Scan
-completion_status: completed_pending_home_verification
-recommended_next: ROADMAP_DETAIL.md에서 CON-07 바로 다음 항목을 확인하고, CON-07 회상 후 해당 항목 진행
-processed: false
+completion_status: completed
+recommended_next: CON-08 @Configuration과 @Bean 프록시
+processed: true
 ---
 
 # CON-07 Component Scan 회사 PC 세션
@@ -185,6 +185,16 @@ Spring은 base package 자체와 하위 패키지의 클래스 메타데이터�
 8. 실습 환경 설명이 달라졌다면 `labs/README.md`를 갱신한다.
 9. 모든 반영과 테스트 성공 후에만 이 파일의 `processed`를 `true`로 변경한다.
 10. commit과 push는 사용자 요청 전까지 수행하지 않는다.
+
+## 집 PC 검증 결과
+
+- 검증일: 2026-07-28
+- `ROADMAP_DETAIL.md` 확인 결과 다음 항목: `CON-08 @Configuration과 @Bean 프록시`
+- 대상 테스트: `.\gradlew.bat test --tests study.componentscan.ComponentScanExperimentTest` → `BUILD SUCCESSFUL`
+- 전체 테스트: `.\gradlew.bat test` → 15개 실행, 실패·오류 0개
+- CON-07 완료 기준과 학습자 재설명 일치 확인
+- `CURRENT.md`, `questions/misconceptions.md`, `questions/unresolved.md`, `labs/README.md` 반영 완료
+- 전체 테스트 성공 확인 후 `processed: true`로 변경
 
 ## 참고 자료
 
