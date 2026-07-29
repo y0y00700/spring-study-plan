@@ -36,7 +36,7 @@ class BeanDestructionScopeTest {
         // 명시적인 getBean() 호출 전 생성 상태
         assertEquals(1, singletonCreated.get());
         assertEquals(0, prototypeCreated.get());
-        
+
         var singleton1 = context.getBean(SingletonBean.class);
         var singleton2 = context.getBean(SingletonBean.class);
         var prototype1 = context.getBean(PrototypeBean.class);
