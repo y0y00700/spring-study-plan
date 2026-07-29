@@ -4,7 +4,7 @@ environment: company_pc_limited
 roadmap_item: CON-09
 completion_status: completed_pending_home_verification
 recommended_next: CON-10
-processed: false
+processed: true
 ---
 
 # CON-09 소멸 콜백과 Scope
@@ -63,6 +63,8 @@ context.close();
 
 assertEquals(1, singletonDestroyed.get());
 assertEquals(0, prototypeDestroyed.get());
+```
+
 테스트 결과
 사용자 실행 결과: 성공
 집 PC에서 실제 파일과 테스트 성공 여부 재확인 필요
@@ -101,3 +103,11 @@ BeanDestructionScopeTest의 실제 경로와 내용을 확인한다.
 확인된 오개념을 questions/misconceptions.md에 반영한다.
 다음 진행 항목을 CON-10으로 확정한다.
 모든 반영과 검증이 끝난 뒤에만 processed: true로 변경한다.
+
+## 집 PC 검증 결과
+
+- 검증일: 2026-07-30
+- 실제 파일: `labs/spring-lab/src/test/java/com/study/springlab/container/BeanDestructionScopeTest.java`
+- 관련 테스트와 전체 테스트가 성공했다.
+- 전체 테스트 결과: 20개 실행, 실패·오류 0개
+- 최소 실험, assertion, 실패 분석, 학습자의 재설명과 완료 기준을 확인해 `CON-09`를 완료로 확정했다.

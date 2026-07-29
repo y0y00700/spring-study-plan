@@ -1,20 +1,20 @@
 # Current Learning Context
 
-마지막 갱신일: 2026-07-29
+마지막 갱신일: 2026-07-30
 
 ## 현재 단계
 
-Spring 컨테이너 기초 진행 중 — `@Configuration` 설정 클래스 프록시가 `@Bean` 메서드 간 직접 호출을 가로채 BeanFactory의 관리 객체를 반환하는 흐름을 최소 재현 실험으로 검증한 단계
+Spring 컨테이너 기초 완료 — Bean 등록, 의존성 선택·해결, 생성, 초기화, 공개, 소멸의 전체 흐름과 Scope별 컨테이너 책임을 최소 재현 실험으로 검증한 단계
 
 ## 현재 주제
 
-`@Configuration`과 `@Bean` 프록시
+Container 종합 진단
 
 ## 로드맵 진행 위치
 
 - 상세 기준: `ROADMAP_DETAIL.md`
-- 최근 완료 항목: `CON-08 @Configuration과 @Bean 프록시`
-- 다음 진행 항목: `CON-09 소멸 콜백과 Scope`
+- 최근 완료 항목: `CON-10 Container 종합 진단`
+- 다음 진행 항목: `WEB-01 HTTP 요청과 응답 경계`
 - 진행 순서: `CON` 완료 후 `WEB → MVC → AOP/TX → JPA → TST/OPS → CAP`
 
 ## 설명할 수 있게 된 것
@@ -61,12 +61,19 @@ Spring 컨테이너 기초 진행 중 — `@Configuration` 설정 클래스 프�
 - `proxyBeanMethods = false`이면 `@Bean` 메서드 간 직접 호출은 일반 Java 호출이므로 메서드 본문의 `new`가 다시 실행될 수 있다.
 - `proxyBeanMethods = false`여도 `@Bean` 분석과 BeanDefinition 등록, BeanFactory의 의존성 검색·객체 생성·저장·조회는 계속 동작한다.
 - `@Bean` 메서드의 의존성을 다른 `@Bean` 메서드 직접 호출 대신 메서드 매개변수로 받으면, BeanFactory가 관리 객체를 전달하므로 설정 클래스 프록시 없이도 중복 생성을 피할 수 있다.
+- 기본 non-lazy Singleton은 컨텍스트 초기화 중 미리 생성되며, Prototype은 BeanFactory에 요청할 때마다 새로 생성된다.
+- Spring 컨테이너는 Prototype의 생성, 의존관계 설정, 초기화까지만 담당하고 호출자에게 전달한 뒤에는 인스턴스와 소멸 콜백을 추적하지 않는다.
+- 컨텍스트를 닫으면 추적 중인 Singleton의 `@PreDestroy`는 호출되지만 Prototype의 `@PreDestroy`는 자동 호출되지 않는다.
+- Prototype이 외부 자원을 보유하면 호출자나 별도의 관리 Bean이 각 인스턴스의 명시적인 정리 메서드를 호출해야 한다.
+- BeanDefinition 등록 단계에서는 타입, 팩토리 메서드, Scope 등 생성 메타데이터를 기록하고 실제 후보 선택과 객체 참조 연결은 Bean 생성 시점에 수행한다.
+- BeanFactory는 의존 Bean을 먼저 생성·초기화하거나 저장된 Singleton을 조회한 뒤 그 참조를 팩토리 메서드에 전달해 의존 객체를 생성한다.
+- 기본 Singleton은 생성과 초기화가 끝난 뒤 저장·공개되므로 반복 조회해도 생성자와 `@PostConstruct`가 다시 실행되지 않는다.
+- 의존 BeanDefinition이 없으면 BeanFactory의 후보 검색 단계에서 실패하므로 의존 객체를 받는 서비스 생성자와 이후 초기화·저장은 실행되지 않는다.
 
 ## 아직 실험으로 검증하지 못한 것
 
 - Spring 내부에서 생성자 선택·매개변수 의존성 해결·생성자 호출을 담당하는 실제 클래스와 메서드
 - 요청이 Controller까지 도착하는 전체 과정
-- 소멸 콜백과 Scope별 컨테이너 책임
 - Spring 프록시와 `@Transactional`의 동작 원리
 - JPA, Hibernate, Spring Data JPA의 역할 차이
 - 영속성 컨텍스트와 flush 시점
@@ -74,14 +81,15 @@ Spring 컨테이너 기초 진행 중 — `@Configuration` 설정 클래스 프�
 ## 현재 실습 환경
 
 - `labs/spring-lab`: Java 17, Spring Boot 4.1.0, Gradle Wrapper 9.5.1
-- 2026-07-29 전체 테스트 성공: 18개 실행, 실패 0개
-- 기존 컨테이너 실험에 더해 `proxyBeanMethods` 설정과 `@Bean` 의존성 연결 방식에 따른 객체 동일성 및 생성 횟수를 검증한다.
+- 2026-07-30 전체 테스트 성공: 20개 실행, 실패·오류 0개
+- `BeanDestructionScopeTest`: Singleton·Prototype의 생성 횟수, 참조 동일성, 컨텍스트 종료 후 소멸 콜백 횟수를 검증한다.
+- `ContainerLifecycleIntegrationTest`: BeanDefinition 등록부터 의존 Bean 우선 생성, 초기화, Singleton 공개·반복 조회, 컨텍스트 종료 시 소멸까지 전체 이벤트 순서를 검증한다.
 
 ## 다음 행동
 
-1. 설정 클래스 프록시가 `@Bean` 메서드 간 직접 호출을 처리하는 경로를 회상한다.
-2. `proxyBeanMethods = false`에서도 메서드 매개변수 주입으로 관리 객체를 받을 수 있는 이유를 설명한다.
-3. `CON-09 소멸 콜백과 Scope`에서 컨텍스트 종료 시 Singleton과 Prototype Bean의 소멸 콜백 결과를 예측하고 최소 실험으로 검증한다.
+1. Singleton과 Prototype의 생성·소멸 책임 차이를 회상한다.
+2. BeanDefinition 등록부터 Singleton 소멸까지 컨테이너의 전체 흐름을 자료 없이 설명한다.
+3. `WEB-01 HTTP 요청과 응답 경계`에서 네트워크 요청·응답 메시지와 Java 객체를 구분하고, 같은 경로에 서로 다른 메서드와 본문을 보내 결과를 비교한다.
 
 ## 다음 세션 시작 요청
 
@@ -89,11 +97,10 @@ Spring 컨테이너 기초 진행 중 — `@Configuration` 설정 클래스 프�
 AGENTS.md, ROADMAP_DETAIL.md, CURRENT.md를 모두 읽고,
 현재 roadmap item, 선수 항목, 오늘의 핵심 개념,
 최소 실험과 완료 기준을 먼저 알려 줘.
-오늘 검증한 설정 클래스 프록시의 `@Bean` 메서드 호출 경로를 먼저 회상시켜 줘.
-그 다음 `proxyBeanMethods=false`에서 직접 호출과
-메서드 매개변수 주입의 결과가 다른 이유를 내가 설명하게 해 줘.
-회상이 끝나면 `CON-09 소멸 콜백과 Scope`를 진행하되,
-컨텍스트 종료 시 Singleton과 Prototype Bean의 소멸 콜백 결과를 내가 먼저 예측하게 해 줘.
+Singleton과 Prototype의 생성·소멸 책임 차이와
+BeanDefinition 등록부터 Singleton 소멸까지의 흐름을 먼저 회상시켜 줘.
+회상이 끝나면 `WEB-01 HTTP 요청과 응답 경계`를 진행하되,
+같은 경로에 서로 다른 메서드와 본문을 보냈을 때의 결과를 내가 먼저 예측하게 해 줘.
 문서에 지정되지 않은 다음 주제를 임의로 추가하지 마.
 테스트 보일러플레이트는 제공하고 실행 순서 예측과 assertion에 집중시켜 줘.
 ```

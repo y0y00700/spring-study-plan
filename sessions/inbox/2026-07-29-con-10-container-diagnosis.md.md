@@ -4,7 +4,7 @@ environment: company_pc_limited
 roadmap_item: CON-10
 completion_status: completed_pending_home_verification
 recommended_next: ROADMAP_DETAIL 전체 확인 후 다음 WEB 항목 확정
-processed: false
+processed: true
 ---
 
 # CON-10 Container 종합 진단
@@ -51,6 +51,8 @@ repository.constructor
 service.constructor
 service.postConstruct
 service.preDestroy
+```
+
 명시적인 getBean() 호출 전까지 생성과 초기화가 완료되고, 컨텍스트 종료 시 service.preDestroy가 추가될 것으로 예측했다.
 검증 내용
 reportService BeanDefinition 등록
@@ -126,3 +128,12 @@ CON-09 및 CON-10 테스트 파일의 실제 경로와 내용을 확인한다.
 확인된 오개념을 questions/misconceptions.md에 반영한다.
 전체 ROADMAP_DETAIL.md를 확인한 뒤 정확한 다음 WEB 항목을 결정한다.
 모든 반영과 검증이 끝난 뒤에만 각 inbox 파일의 processed를 true로 변경한다.
+
+## 집 PC 검증 결과
+
+- 검증일: 2026-07-30
+- 실제 파일: `labs/spring-lab/src/test/java/com/study/springlab/container/ContainerLifecycleIntegrationTest.java`
+- 관련 테스트와 전체 테스트가 성공했다.
+- 전체 테스트 결과: 20개 실행, 실패·오류 0개
+- 최소 실험, assertion, 실패 분석, 학습자의 재설명과 완료 기준을 확인해 `CON-10`을 완료로 확정했다.
+- `ROADMAP_DETAIL.md`의 다음 항목을 확인해 다음 진행 항목을 `WEB-01 HTTP 요청과 응답 경계`로 확정했다.
