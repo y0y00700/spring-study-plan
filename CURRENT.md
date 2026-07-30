@@ -4,17 +4,17 @@
 
 ## 현재 단계
 
-Spring 컨테이너 기초 완료 — Bean 등록, 의존성 선택·해결, 생성, 초기화, 공개, 소멸의 전체 흐름과 Scope별 컨테이너 책임을 최소 재현 실험으로 검증한 단계
+웹 애플리케이션 기반 진행 중 — HTTP 요청·응답 메시지와 Java 객체의 경계, Servlet 생명주기와 Servlet Container의 관리 책임을 최소 재현 실험으로 검증한 단계
 
 ## 현재 주제
 
-Container 종합 진단
+Servlet과 Servlet Container
 
 ## 로드맵 진행 위치
 
 - 상세 기준: `ROADMAP_DETAIL.md`
-- 최근 완료 항목: `CON-10 Container 종합 진단`
-- 다음 진행 항목: `WEB-01 HTTP 요청과 응답 경계`
+- 최근 완료 항목: `WEB-02 Servlet과 Servlet Container`
+- 다음 진행 항목: `WEB-03 Tomcat 스레드와 공유 객체`
 - 진행 순서: `CON` 완료 후 `WEB → MVC → AOP/TX → JPA → TST/OPS → CAP`
 
 ## 설명할 수 있게 된 것
@@ -69,6 +69,17 @@ Container 종합 진단
 - BeanFactory는 의존 Bean을 먼저 생성·초기화하거나 저장된 Singleton을 조회한 뒤 그 참조를 팩토리 메서드에 전달해 의존 객체를 생성한다.
 - 기본 Singleton은 생성과 초기화가 끝난 뒤 저장·공개되므로 반복 조회해도 생성자와 `@PostConstruct`가 다시 실행되지 않는다.
 - 의존 BeanDefinition이 없으면 BeanFactory의 후보 검색 단계에서 실패하므로 의존 객체를 받는 서비스 생성자와 이후 초기화·저장은 실행되지 않는다.
+- HTTP 요청과 응답은 메서드·경로·헤더·본문 등의 요소로 구성된 네트워크 메시지다.
+- 서버와 클라이언트는 서로 독립된 실행 환경과 메모리 공간을 사용하므로 Java 객체 참조가 네트워크를 직접 통과하지 않는다.
+- 전송 시 요청 객체의 정보와 본문 데이터는 HTTP 메시지의 바이트 표현으로 바뀌고, 수신자는 데이터를 자신의 실행 환경에서 새 값이나 객체로 구성한다.
+- 같은 경로라도 HTTP 메서드가 다르면 다른 처리 코드가 선택될 수 있고, 해당 메서드를 처리하는 매핑이 없으면 `405 Method Not Allowed`가 반환될 수 있다.
+- HTTP 본문 바이트는 전송할 데이터를 인코딩한 표현이고, Java 바이트코드는 JVM이 실행하는 `.class` 명령이므로 서로 다른 개념이다.
+- `loadOnStartup=1`인 Servlet은 서버 시작 과정에서 Servlet Container가 인스턴스를 생성하고 `init()`을 한 번 호출한다.
+- 요청마다 Servlet Container가 같은 Servlet 인스턴스의 `service(request, response)`를 호출하므로 생성자·`init()`의 횟수와 `service()`의 횟수는 다르다.
+- 서버 종료 시 Servlet Container가 `destroy()`를 한 번 호출하지만, 이는 자원 정리 기회를 주는 콜백이며 객체 메모리를 직접 회수하는 연산은 아니다.
+- Servlet 객체의 실제 메모리 회수는 참조 관계가 끊어진 이후 JVM GC가 담당한다.
+- 이번 실험에서 Spring ApplicationContext는 `ServletContextInitializer` Bean을 관리했고, Initializer는 Servlet 클래스를 등록했다.
+- 등록된 `LifecycleServlet` 객체의 생성과 `init()`·`service()`·`destroy()` 호출은 Servlet Container인 Tomcat이 담당했다.
 
 ## 아직 실험으로 검증하지 못한 것
 
@@ -81,15 +92,18 @@ Container 종합 진단
 ## 현재 실습 환경
 
 - `labs/spring-lab`: Java 17, Spring Boot 4.1.0, Gradle Wrapper 9.5.1
-- 2026-07-30 전체 테스트 성공: 20개 실행, 실패·오류 0개
+- 테스트용 웹 환경: `spring-boot-starter-web`, 내장 Tomcat, Java `HttpClient`
+- 2026-07-30 전체 테스트 성공: 22개 실행, 실패·오류 0개
 - `BeanDestructionScopeTest`: Singleton·Prototype의 생성 횟수, 참조 동일성, 컨텍스트 종료 후 소멸 콜백 횟수를 검증한다.
 - `ContainerLifecycleIntegrationTest`: BeanDefinition 등록부터 의존 Bean 우선 생성, 초기화, Singleton 공개·반복 조회, 컨텍스트 종료 시 소멸까지 전체 이벤트 순서를 검증한다.
+- `HttpRequestResponseBoundaryTest`: 실제 임의 포트 서버에 같은 경로의 GET·POST·PUT 요청을 보내 메서드·본문에 따른 상태 코드와 응답 본문 차이를 검증한다.
+- `ServletLifecycleContainerTest`: Tomcat이 Servlet을 생성하고 `init()`·`service()`·`destroy()`를 호출하는 순서와 두 요청이 같은 Servlet 인스턴스를 사용하는 사실을 검증한다.
 
 ## 다음 행동
 
-1. Singleton과 Prototype의 생성·소멸 책임 차이를 회상한다.
-2. BeanDefinition 등록부터 Singleton 소멸까지 컨테이너의 전체 흐름을 자료 없이 설명한다.
-3. `WEB-01 HTTP 요청과 응답 경계`에서 네트워크 요청·응답 메시지와 Java 객체를 구분하고, 같은 경로에 서로 다른 메서드와 본문을 보내 결과를 비교한다.
+1. HTTP 메시지와 Java 객체가 구분되는 이유를 실행 환경·메모리 공간·데이터 표현의 경계로 회상한다.
+2. `loadOnStartup=1`인 Servlet의 생성자·`init()`·`service()`·`destroy()` 호출 주체와 횟수를 설명한다.
+3. `WEB-03 Tomcat 스레드와 공유 객체`에서 두 동시 요청이 같은 Servlet 또는 Singleton의 변경 가능한 상태에 접근할 때의 결과를 먼저 예측하고 재현한다.
 
 ## 다음 세션 시작 요청
 
@@ -97,10 +111,10 @@ Container 종합 진단
 AGENTS.md, ROADMAP_DETAIL.md, CURRENT.md를 모두 읽고,
 현재 roadmap item, 선수 항목, 오늘의 핵심 개념,
 최소 실험과 완료 기준을 먼저 알려 줘.
-Singleton과 Prototype의 생성·소멸 책임 차이와
-BeanDefinition 등록부터 Singleton 소멸까지의 흐름을 먼저 회상시켜 줘.
-회상이 끝나면 `WEB-01 HTTP 요청과 응답 경계`를 진행하되,
-같은 경로에 서로 다른 메서드와 본문을 보냈을 때의 결과를 내가 먼저 예측하게 해 줘.
+HTTP 메시지와 Java 객체의 경계,
+Servlet Container가 Servlet을 생성하고 생명주기 메서드를 호출하는 흐름을 먼저 회상시켜 줘.
+회상이 끝나면 `WEB-03 Tomcat 스레드와 공유 객체`를 진행하되,
+두 동시 요청이 같은 Servlet 또는 Singleton의 변경 가능한 상태에 접근할 때의 결과를 내가 먼저 예측하게 해 줘.
 문서에 지정되지 않은 다음 주제를 임의로 추가하지 마.
 테스트 보일러플레이트는 제공하고 실행 순서 예측과 assertion에 집중시켜 줘.
 ```
