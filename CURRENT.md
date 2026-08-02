@@ -1,20 +1,21 @@
 # Current Learning Context
 
-마지막 갱신일: 2026-08-02
+마지막 갱신일: 2026-08-03
 
 ## 현재 단계
 
-Spring MVC 시작 — DispatcherServlet이 공통 진입점에서 Handler 탐색과 호출을 협력 객체에 위임하고 Controller까지 도달하는 흐름을 실제 DispatcherServlet 요청으로 검증한 단계
+Spring MVC 진행 중 — HandlerMapping의 Handler 탐색과 HandlerAdapter의 호출 방식 선택을 실제 DispatcherServlet 요청으로 검증했지만 두 역할의 구분을 재설명하는 복습이 필요한 단계
 
 ## 현재 주제
 
-DispatcherServlet 요청 처리
+HandlerMapping과 HandlerAdapter (`needs_review`)
 
 ## 로드맵 진행 위치
 
 - 상세 기준: `ROADMAP_DETAIL.md`
 - 최근 완료 항목: `MVC-01 DispatcherServlet 요청 처리`
-- 다음 진행 항목: `MVC-02 HandlerMapping과 HandlerAdapter`
+- 현재 진행 항목: `MVC-02 HandlerMapping과 HandlerAdapter` (`needs_review`)
+- 다음 진행 항목: `MVC-02 HandlerMapping과 HandlerAdapter` 복습 및 완료 기준 재검증
 - 진행 순서: `CON` 완료 후 `WEB → MVC → AOP/TX → JPA → TST/OPS → CAP`
 
 ## 설명할 수 있게 된 것
@@ -101,6 +102,18 @@ DispatcherServlet 요청 처리
 - HandlerMapping이 Handler를 반환하지 않으면 DispatcherServlet은 HandlerAdapter와 Controller를 호출할 수 없다.
 - DispatcherServlet이 탐색과 호출을 위임하면 새 Controller와 호출 방식이 추가되어도 공통 요청 진입점의 코드를 직접 수정하지 않고 전체 흐름 조정 역할을 유지할 수 있다.
 
+## 이번 실험에서 확인한 것
+
+- 하나의 학습용 HandlerMapping이 요청 URI에 따라 `MethodStyleHandler`, `DirectStyleHandler`, `null` 중 하나를 반환하는 경로를 검증했다.
+- DispatcherServlet은 HandlerMapping이 반환한 Handler를 각 HandlerAdapter의 `supports(handler)`에 전달하고, 지원하는 Adapter의 `handle()`을 호출한다.
+- 선택된 HandlerAdapter의 `handle()`이 자신이 지원하는 Handler의 실제 처리 메서드를 호출한다.
+- HandlerMapping이 `null`을 반환하면 HandlerAdapter와 Handler는 호출되지 않고 응답 상태는 `404 Not Found`가 된다.
+
+## 복습이 필요한 것
+
+- Handler는 요청을 실제로 처리하도록 선택된 대상이고, HandlerAdapter는 그 Handler의 타입을 검사하고 호출 방법을 적용하는 객체라는 차이를 자신의 말로 다시 설명해야 한다.
+- HandlerAdapter의 `supports()`가 후보 선택을 위해 호출되는 것과 선택된 Adapter의 `handle()`이 실제 호출되는 것을 구분해야 한다.
+
 ## 아직 실험으로 검증하지 못한 것
 
 - Spring 내부에서 생성자 선택·매개변수 의존성 해결·생성자 호출을 담당하는 실제 클래스와 메서드
@@ -112,7 +125,7 @@ DispatcherServlet 요청 처리
 
 - `labs/spring-lab`: Java 17, Spring Boot 4.1.0, Gradle Wrapper 9.5.1
 - 테스트용 웹 환경: `spring-boot-starter-web`, 내장 Tomcat, Java `HttpClient`
-- 2026-08-02 전체 테스트 성공: 26개 실행, 실패·오류·건너뜀 0개
+- 2026-08-03 전체 테스트 성공: 29개 실행, 실패·오류·건너뜀 0개
 - `BeanDestructionScopeTest`: Singleton·Prototype의 생성 횟수, 참조 동일성, 컨텍스트 종료 후 소멸 콜백 횟수를 검증한다.
 - `ContainerLifecycleIntegrationTest`: BeanDefinition 등록부터 의존 Bean 우선 생성, 초기화, Singleton 공개·반복 조회, 컨텍스트 종료 시 소멸까지 전체 이벤트 순서를 검증한다.
 - `HttpRequestResponseBoundaryTest`: 실제 임의 포트 서버에 같은 경로의 GET·POST·PUT 요청을 보내 메서드·본문에 따른 상태 코드와 응답 본문 차이를 검증한다.
@@ -120,12 +133,13 @@ DispatcherServlet 요청 처리
 - `TomcatThreadSharedStateTest`: 두 동시 요청을 서로 다른 Tomcat 스레드가 처리하면서 같은 Singleton Controller의 필드를 공유해 A 요청이 B의 값을 읽는 간섭을 검증한다.
 - `FilterListenerDispatcherServletOrderTest`: 정상 요청과 Filter 차단 요청에서 Listener·Filter·Controller 이벤트, HTTP 상태 코드, `chain.doFilter()` 호출 여부를 검증한다.
 - `DispatcherServletDelegationTest`: 실제 DispatcherServlet이 HandlerMapping에서 Handler를 찾고 HandlerAdapter에 호출을 위임해 Controller까지 도달하는 이벤트 순서를 검증한다.
+- `HandlerMappingAdapterSeparationTest`: 하나의 HandlerMapping이 서로 다른 Handler를 반환할 때 `supports()`로 선택된 HandlerAdapter만 Handler를 호출하고, 매핑 실패 시 Adapter 호출 없이 404가 되는 경로를 검증한다.
 
 ## 다음 행동
 
-1. Handler, HandlerMapping, HandlerAdapter가 요청 흐름에서 맡은 역할을 회상한다.
-2. DispatcherServlet이 비즈니스 로직을 직접 실행하지 않는 이유를 새 Controller 추가 상황으로 설명한다.
-3. `MVC-02 HandlerMapping과 HandlerAdapter`에서 Handler 탐색과 호출 방식을 분리한 이유를 실행 순서로 예측하고 검증한다.
+1. Handler와 HandlerAdapter를 `호출 대상`과 `호출 방법을 아는 객체`로 구분해 실제 테스트 객체에 대입한다.
+2. `HandlerMapping → Handler 반환 → HandlerAdapter.supports(handler) → 선택된 Adapter.handle() → Handler 호출` 순서를 재설명한다.
+3. 새로운 호출 방식의 Handler가 추가될 때 HandlerAdapter 확장으로 DispatcherServlet의 공통 흐름을 유지하는 이유를 설명해 `MVC-02` 완료 기준을 다시 검증한다.
 
 ## 다음 세션 시작 요청
 
@@ -133,10 +147,10 @@ DispatcherServlet 요청 처리
 AGENTS.md, ROADMAP_DETAIL.md, CURRENT.md를 모두 읽고,
 현재 roadmap item, 선수 항목, 오늘의 핵심 개념,
 최소 실험과 완료 기준을 먼저 알려 줘.
-DispatcherServlet, HandlerMapping, HandlerAdapter, Controller의 실행 순서와
-DispatcherServlet이 비즈니스 로직을 직접 실행하지 않는 이유를 먼저 회상시켜 줘.
-회상이 끝나면 `MVC-02 HandlerMapping과 HandlerAdapter`를 진행하되,
-Handler 탐색과 호출 방식을 왜 분리했는지 내가 먼저 예측하게 해 줘.
+`MVC-02 HandlerMapping과 HandlerAdapter`는 실험은 성공했지만 `needs_review` 상태야.
+Handler와 HandlerAdapter를 실제 `HandlerMappingAdapterSeparationTest` 객체에 대입해 구분하게 하고,
+`supports()` 후보 검사와 선택된 Adapter의 `handle()` 실행 차이를 먼저 회상시켜 줘.
+회상이 끝나면 Handler 탐색과 호출 방식을 분리한 이유를 실행 순서로 다시 설명하게 해 줘.
 문서에 지정되지 않은 다음 주제를 임의로 추가하지 마.
 테스트 보일러플레이트는 제공하고 실행 순서 예측과 assertion에 집중시켜 줘.
 ```
