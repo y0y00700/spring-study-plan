@@ -12,7 +12,7 @@ Spring 개념을 격리해 검증하는 실험 코드를 둡니다.
 - 테스트 웹 환경: `spring-boot-starter-web`, 내장 Tomcat, Java `HttpClient`
 - 테스트 실행: `labs/spring-lab`에서 `.\gradlew.bat test`
 
-2026-07-30 기준 전체 테스트 22개가 성공했습니다.
+2026-08-02 기준 전체 테스트 25개가 성공했습니다. 실패·오류·건너뜀 테스트는 없습니다.
 
 - `SpringLabApplicationTests`: Spring 컨텍스트 로딩
 - `SingletonSharedStateTest`: 메서드 인자로 같은 변경 가능한 리스트를 공유할 때 호출 결과가 간섭하는지 검증
@@ -27,6 +27,8 @@ Spring 개념을 격리해 검증하는 실험 코드를 둡니다.
 - `ContainerLifecycleIntegrationTest`: BeanDefinition 등록, 의존 Bean 우선 생성, `@PostConstruct`, Singleton 공개·반복 조회, 컨텍스트 종료 후 `@PreDestroy`까지 전체 이벤트 순서 검증
 - `HttpRequestResponseBoundaryTest`: 임의 포트의 실제 서버에 같은 경로의 GET·POST·PUT을 보내 메서드·본문별 상태 코드와 응답 본문 검증
 - `ServletLifecycleContainerTest`: Tomcat이 Servlet을 생성하고 `init()`·`service()`·`destroy()`를 호출하는 순서, 두 요청의 Servlet 인스턴스 동일성 검증
+- `TomcatThreadSharedStateTest`: 두 동시 요청을 서로 다른 Tomcat 스레드가 처리하면서 같은 Singleton Controller의 필드를 공유해 요청 간 간섭이 발생하는 것을 검증
+- `FilterListenerDispatcherServletOrderTest`: 정상 요청과 Filter 차단 요청의 HTTP 상태 코드, Listener·Filter·Controller 이벤트 순서, `chain.doFilter()`의 진행 통제를 검증
 
 ```text
 spring-lab/src/test/java/com/study/springlab/
@@ -59,6 +61,12 @@ spring-lab/src/test/java/study/configuration/
 spring-lab/src/test/java/webboundary/
 ├─ HttpRequestResponseBoundaryTest.java
 └─ ServletLifecycleContainerTest.java
+
+spring-lab/src/test/java/tomcat/
+└─ TomcatThreadSharedStateTest.java
+
+spring-lab/src/test/java/webfoundation/
+└─ FilterListenerDispatcherServletOrderTest.java
 ```
 
 모든 실험에는 다음 내용을 남깁니다.

@@ -1,20 +1,20 @@
 # Current Learning Context
 
-마지막 갱신일: 2026-07-30
+마지막 갱신일: 2026-08-02
 
 ## 현재 단계
 
-웹 애플리케이션 기반 진행 중 — HTTP 요청·응답 메시지와 Java 객체의 경계, Servlet 생명주기와 Servlet Container의 관리 책임을 최소 재현 실험으로 검증한 단계
+웹 애플리케이션 기반 완료 — Tomcat의 요청 생명주기 Listener 호출, Filter chain의 전처리·후처리, DispatcherServlet 진입과 Filter 차단 경로를 실제 HTTP 요청으로 검증한 단계
 
 ## 현재 주제
 
-Servlet과 Servlet Container
+Filter, Listener, DispatcherServlet의 위치
 
 ## 로드맵 진행 위치
 
 - 상세 기준: `ROADMAP_DETAIL.md`
-- 최근 완료 항목: `WEB-02 Servlet과 Servlet Container`
-- 다음 진행 항목: `WEB-03 Tomcat 스레드와 공유 객체`
+- 최근 완료 항목: `WEB-04 Filter, Listener, DispatcherServlet의 위치`
+- 다음 진행 항목: `MVC-01 DispatcherServlet 요청 처리`
 - 진행 순서: `CON` 완료 후 `WEB → MVC → AOP/TX → JPA → TST/OPS → CAP`
 
 ## 설명할 수 있게 된 것
@@ -80,11 +80,24 @@ Servlet과 Servlet Container
 - Servlet 객체의 실제 메모리 회수는 참조 관계가 끊어진 이후 JVM GC가 담당한다.
 - 이번 실험에서 Spring ApplicationContext는 `ServletContextInitializer` Bean을 관리했고, Initializer는 Servlet 클래스를 등록했다.
 - 등록된 `LifecycleServlet` 객체의 생성과 `init()`·`service()`·`destroy()` 호출은 Servlet Container인 Tomcat이 담당했다.
+- Tomcat은 동시 HTTP 요청을 서로 다른 요청 스레드에서 처리할 수 있다.
+- Spring Singleton Controller는 인스턴스가 하나이며 여러 요청 스레드가 같은 인스턴스를 호출한다.
+- Singleton Controller의 인스턴스 필드에 요청별 변경 상태를 저장하면 다른 요청이 그 값을 덮어써 요청 간 간섭이 발생할 수 있다.
+- 메서드 지역변수는 호출별 스택 프레임에 별도로 존재하므로, Singleton이라는 이유만으로 지역변수 자체가 요청 간 공유되지는 않는다.
+- 서로 다른 지역변수가 Singleton 필드에 저장된 같은 `ArrayList` 같은 변경 가능 객체를 가리키면, 지역변수는 분리되어도 참조 대상의 상태는 공유된다.
+- `CountDownLatch` 실험으로 `A 저장 → B 덮어쓰기 → A 재개`를 고정했고, A 요청도 최종적으로 공유 필드의 `B`를 읽는 결과를 검증했다.
+- Tomcat은 요청 처리 시작과 종료에 `ServletRequestListener` 콜백을 호출하며, Listener는 요청을 다음 단계로 전달하는 호출 사슬이 아니라 요청 생명주기를 관찰하는 확장 지점이다.
+- Filter의 `chain.doFilter()`는 남아 있는 다음 Filter 또는 최종 Servlet을 호출하고 그 처리가 끝나면 복귀하는 중첩 메서드 호출이다.
+- Spring MVC 웹 요청에서 Filter chain 뒤의 최종 Servlet은 DispatcherServlet이고, Controller는 `chain.doFilter()` 호출 동안 DispatcherServlet 내부에서 호출된다.
+- 정상 요청의 이벤트는 `requestInitialized → filter-before → controller → filter-after → requestDestroyed` 순서로 실행됐다.
+- Filter가 상태 코드를 설정하고 `chain.doFilter()` 없이 `return`하면 DispatcherServlet과 Controller는 호출되지 않고, 같은 Filter의 `return` 뒤 후처리도 실행되지 않는다.
+- Filter가 요청을 차단해도 요청 처리 생명주기는 종료되므로 Tomcat은 Listener의 `requestDestroyed()`를 호출한다.
+- Filter는 요청·응답을 검사·변경하거나 다음 단계 진행을 통제할 수 있지만, 정상 요청의 응답을 항상 Filter가 생성하는 것은 아니다.
 
 ## 아직 실험으로 검증하지 못한 것
 
 - Spring 내부에서 생성자 선택·매개변수 의존성 해결·생성자 호출을 담당하는 실제 클래스와 메서드
-- 요청이 Controller까지 도착하는 전체 과정
+- DispatcherServlet 내부에서 Controller를 찾고 호출하는 전체 과정
 - Spring 프록시와 `@Transactional`의 동작 원리
 - JPA, Hibernate, Spring Data JPA의 역할 차이
 - 영속성 컨텍스트와 flush 시점
@@ -93,17 +106,19 @@ Servlet과 Servlet Container
 
 - `labs/spring-lab`: Java 17, Spring Boot 4.1.0, Gradle Wrapper 9.5.1
 - 테스트용 웹 환경: `spring-boot-starter-web`, 내장 Tomcat, Java `HttpClient`
-- 2026-07-30 전체 테스트 성공: 22개 실행, 실패·오류 0개
+- 2026-08-02 전체 테스트 성공: 25개 실행, 실패·오류·건너뜀 0개
 - `BeanDestructionScopeTest`: Singleton·Prototype의 생성 횟수, 참조 동일성, 컨텍스트 종료 후 소멸 콜백 횟수를 검증한다.
 - `ContainerLifecycleIntegrationTest`: BeanDefinition 등록부터 의존 Bean 우선 생성, 초기화, Singleton 공개·반복 조회, 컨텍스트 종료 시 소멸까지 전체 이벤트 순서를 검증한다.
 - `HttpRequestResponseBoundaryTest`: 실제 임의 포트 서버에 같은 경로의 GET·POST·PUT 요청을 보내 메서드·본문에 따른 상태 코드와 응답 본문 차이를 검증한다.
 - `ServletLifecycleContainerTest`: Tomcat이 Servlet을 생성하고 `init()`·`service()`·`destroy()`를 호출하는 순서와 두 요청이 같은 Servlet 인스턴스를 사용하는 사실을 검증한다.
+- `TomcatThreadSharedStateTest`: 두 동시 요청을 서로 다른 Tomcat 스레드가 처리하면서 같은 Singleton Controller의 필드를 공유해 A 요청이 B의 값을 읽는 간섭을 검증한다.
+- `FilterListenerDispatcherServletOrderTest`: 정상 요청과 Filter 차단 요청에서 Listener·Filter·Controller 이벤트, HTTP 상태 코드, `chain.doFilter()` 호출 여부를 검증한다.
 
 ## 다음 행동
 
-1. HTTP 메시지와 Java 객체가 구분되는 이유를 실행 환경·메모리 공간·데이터 표현의 경계로 회상한다.
-2. `loadOnStartup=1`인 Servlet의 생성자·`init()`·`service()`·`destroy()` 호출 주체와 횟수를 설명한다.
-3. `WEB-03 Tomcat 스레드와 공유 객체`에서 두 동시 요청이 같은 Servlet 또는 Singleton의 변경 가능한 상태에 접근할 때의 결과를 먼저 예측하고 재현한다.
+1. Listener와 Filter의 책임, `chain.doFilter()`의 호출·복귀, Filter 차단 경로를 회상한다.
+2. 정상 요청과 Filter 차단 요청의 이벤트 순서를 자료 없이 설명한다.
+3. `MVC-01 DispatcherServlet 요청 처리`에서 DispatcherServlet 진입부터 Controller 호출까지의 위임 흐름을 먼저 예측하고 검증한다.
 
 ## 다음 세션 시작 요청
 
@@ -111,10 +126,10 @@ Servlet과 Servlet Container
 AGENTS.md, ROADMAP_DETAIL.md, CURRENT.md를 모두 읽고,
 현재 roadmap item, 선수 항목, 오늘의 핵심 개념,
 최소 실험과 완료 기준을 먼저 알려 줘.
-HTTP 메시지와 Java 객체의 경계,
-Servlet Container가 Servlet을 생성하고 생명주기 메서드를 호출하는 흐름을 먼저 회상시켜 줘.
-회상이 끝나면 `WEB-03 Tomcat 스레드와 공유 객체`를 진행하되,
-두 동시 요청이 같은 Servlet 또는 Singleton의 변경 가능한 상태에 접근할 때의 결과를 내가 먼저 예측하게 해 줘.
+Listener와 Filter의 책임, `chain.doFilter()`의 호출·복귀,
+정상 요청과 Filter 차단 요청의 이벤트 순서를 먼저 회상시켜 줘.
+회상이 끝나면 `MVC-01 DispatcherServlet 요청 처리`를 진행하되,
+DispatcherServlet이 Controller를 직접 실행하는지 또는 다른 구성요소에게 위임하는지 내가 먼저 예측하게 해 줘.
 문서에 지정되지 않은 다음 주제를 임의로 추가하지 마.
 테스트 보일러플레이트는 제공하고 실행 순서 예측과 assertion에 집중시켜 줘.
 ```
