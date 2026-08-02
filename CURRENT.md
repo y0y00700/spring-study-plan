@@ -4,17 +4,17 @@
 
 ## 현재 단계
 
-웹 애플리케이션 기반 완료 — Tomcat의 요청 생명주기 Listener 호출, Filter chain의 전처리·후처리, DispatcherServlet 진입과 Filter 차단 경로를 실제 HTTP 요청으로 검증한 단계
+Spring MVC 시작 — DispatcherServlet이 공통 진입점에서 Handler 탐색과 호출을 협력 객체에 위임하고 Controller까지 도달하는 흐름을 실제 DispatcherServlet 요청으로 검증한 단계
 
 ## 현재 주제
 
-Filter, Listener, DispatcherServlet의 위치
+DispatcherServlet 요청 처리
 
 ## 로드맵 진행 위치
 
 - 상세 기준: `ROADMAP_DETAIL.md`
-- 최근 완료 항목: `WEB-04 Filter, Listener, DispatcherServlet의 위치`
-- 다음 진행 항목: `MVC-01 DispatcherServlet 요청 처리`
+- 최근 완료 항목: `MVC-01 DispatcherServlet 요청 처리`
+- 다음 진행 항목: `MVC-02 HandlerMapping과 HandlerAdapter`
 - 진행 순서: `CON` 완료 후 `WEB → MVC → AOP/TX → JPA → TST/OPS → CAP`
 
 ## 설명할 수 있게 된 것
@@ -93,11 +93,17 @@ Filter, Listener, DispatcherServlet의 위치
 - Filter가 상태 코드를 설정하고 `chain.doFilter()` 없이 `return`하면 DispatcherServlet과 Controller는 호출되지 않고, 같은 Filter의 `return` 뒤 후처리도 실행되지 않는다.
 - Filter가 요청을 차단해도 요청 처리 생명주기는 종료되므로 Tomcat은 Listener의 `requestDestroyed()`를 호출한다.
 - Filter는 요청·응답을 검사·변경하거나 다음 단계 진행을 통제할 수 있지만, 정상 요청의 응답을 항상 Filter가 생성하는 것은 아니다.
+- Handler는 DispatcherServlet 관점에서 현재 요청을 처리하도록 선택된 대상이며, 이번 실험에서는 Spring Bean인 `TestController` 객체였다.
+- DispatcherServlet은 모든 요청을 받는 Front Controller이며, 자신이 특정 Controller의 비즈니스 로직을 직접 실행하지 않고 Handler 탐색과 호출을 협력 객체에 위임한다.
+- HandlerMapping은 요청 URI를 보고 Handler를 담은 `HandlerExecutionChain`을 반환하고, 일치하는 Handler가 없으면 `null`을 반환한다.
+- DispatcherServlet은 HandlerMapping이 찾은 Handler를 호출 가능한 HandlerAdapter에 전달하고, HandlerAdapter가 실제 Controller 메서드를 호출한다.
+- 실제 요청 이벤트는 `dispatcher-servlet → handler-mapping → handler-adapter → controller` 순서로 실행됐다.
+- HandlerMapping이 Handler를 반환하지 않으면 DispatcherServlet은 HandlerAdapter와 Controller를 호출할 수 없다.
+- DispatcherServlet이 탐색과 호출을 위임하면 새 Controller와 호출 방식이 추가되어도 공통 요청 진입점의 코드를 직접 수정하지 않고 전체 흐름 조정 역할을 유지할 수 있다.
 
 ## 아직 실험으로 검증하지 못한 것
 
 - Spring 내부에서 생성자 선택·매개변수 의존성 해결·생성자 호출을 담당하는 실제 클래스와 메서드
-- DispatcherServlet 내부에서 Controller를 찾고 호출하는 전체 과정
 - Spring 프록시와 `@Transactional`의 동작 원리
 - JPA, Hibernate, Spring Data JPA의 역할 차이
 - 영속성 컨텍스트와 flush 시점
@@ -106,19 +112,20 @@ Filter, Listener, DispatcherServlet의 위치
 
 - `labs/spring-lab`: Java 17, Spring Boot 4.1.0, Gradle Wrapper 9.5.1
 - 테스트용 웹 환경: `spring-boot-starter-web`, 내장 Tomcat, Java `HttpClient`
-- 2026-08-02 전체 테스트 성공: 25개 실행, 실패·오류·건너뜀 0개
+- 2026-08-02 전체 테스트 성공: 26개 실행, 실패·오류·건너뜀 0개
 - `BeanDestructionScopeTest`: Singleton·Prototype의 생성 횟수, 참조 동일성, 컨텍스트 종료 후 소멸 콜백 횟수를 검증한다.
 - `ContainerLifecycleIntegrationTest`: BeanDefinition 등록부터 의존 Bean 우선 생성, 초기화, Singleton 공개·반복 조회, 컨텍스트 종료 시 소멸까지 전체 이벤트 순서를 검증한다.
 - `HttpRequestResponseBoundaryTest`: 실제 임의 포트 서버에 같은 경로의 GET·POST·PUT 요청을 보내 메서드·본문에 따른 상태 코드와 응답 본문 차이를 검증한다.
 - `ServletLifecycleContainerTest`: Tomcat이 Servlet을 생성하고 `init()`·`service()`·`destroy()`를 호출하는 순서와 두 요청이 같은 Servlet 인스턴스를 사용하는 사실을 검증한다.
 - `TomcatThreadSharedStateTest`: 두 동시 요청을 서로 다른 Tomcat 스레드가 처리하면서 같은 Singleton Controller의 필드를 공유해 A 요청이 B의 값을 읽는 간섭을 검증한다.
 - `FilterListenerDispatcherServletOrderTest`: 정상 요청과 Filter 차단 요청에서 Listener·Filter·Controller 이벤트, HTTP 상태 코드, `chain.doFilter()` 호출 여부를 검증한다.
+- `DispatcherServletDelegationTest`: 실제 DispatcherServlet이 HandlerMapping에서 Handler를 찾고 HandlerAdapter에 호출을 위임해 Controller까지 도달하는 이벤트 순서를 검증한다.
 
 ## 다음 행동
 
-1. Listener와 Filter의 책임, `chain.doFilter()`의 호출·복귀, Filter 차단 경로를 회상한다.
-2. 정상 요청과 Filter 차단 요청의 이벤트 순서를 자료 없이 설명한다.
-3. `MVC-01 DispatcherServlet 요청 처리`에서 DispatcherServlet 진입부터 Controller 호출까지의 위임 흐름을 먼저 예측하고 검증한다.
+1. Handler, HandlerMapping, HandlerAdapter가 요청 흐름에서 맡은 역할을 회상한다.
+2. DispatcherServlet이 비즈니스 로직을 직접 실행하지 않는 이유를 새 Controller 추가 상황으로 설명한다.
+3. `MVC-02 HandlerMapping과 HandlerAdapter`에서 Handler 탐색과 호출 방식을 분리한 이유를 실행 순서로 예측하고 검증한다.
 
 ## 다음 세션 시작 요청
 
@@ -126,10 +133,10 @@ Filter, Listener, DispatcherServlet의 위치
 AGENTS.md, ROADMAP_DETAIL.md, CURRENT.md를 모두 읽고,
 현재 roadmap item, 선수 항목, 오늘의 핵심 개념,
 최소 실험과 완료 기준을 먼저 알려 줘.
-Listener와 Filter의 책임, `chain.doFilter()`의 호출·복귀,
-정상 요청과 Filter 차단 요청의 이벤트 순서를 먼저 회상시켜 줘.
-회상이 끝나면 `MVC-01 DispatcherServlet 요청 처리`를 진행하되,
-DispatcherServlet이 Controller를 직접 실행하는지 또는 다른 구성요소에게 위임하는지 내가 먼저 예측하게 해 줘.
+DispatcherServlet, HandlerMapping, HandlerAdapter, Controller의 실행 순서와
+DispatcherServlet이 비즈니스 로직을 직접 실행하지 않는 이유를 먼저 회상시켜 줘.
+회상이 끝나면 `MVC-02 HandlerMapping과 HandlerAdapter`를 진행하되,
+Handler 탐색과 호출 방식을 왜 분리했는지 내가 먼저 예측하게 해 줘.
 문서에 지정되지 않은 다음 주제를 임의로 추가하지 마.
 테스트 보일러플레이트는 제공하고 실행 순서 예측과 assertion에 집중시켜 줘.
 ```
