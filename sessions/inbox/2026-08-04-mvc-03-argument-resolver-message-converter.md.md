@@ -4,7 +4,7 @@ environment: company_restricted
 roadmap_item: MVC-03 ArgumentResolver와 HttpMessageConverter
 completion_status: completed
 recommended_next: MVC-04 Validation과 예외 처리
-processed: false
+processed: true
 ---
 
 # MVC-03 ArgumentResolver와 HttpMessageConverter
@@ -21,7 +21,7 @@ processed: false
 ## 실험 환경
 
 - 기준 디렉터리: `labs/spring-lab`
-- 테스트 파일: `src/test/java/com/example/springlab/mvc/ArgumentResolverMessageConverterTest.java`
+- 테스트 파일: `src/test/java/mvc/ArgumentResolverMessageConverterTest.java`
 - 실제 내장 서버의 임의 포트에 Java HttpClient로 요청
 - 실행 결과: 테스트 4개 성공
 

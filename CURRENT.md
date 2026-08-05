@@ -1,21 +1,21 @@
 # Current Learning Context
 
-마지막 갱신일: 2026-08-03
+마지막 갱신일: 2026-08-06
 
 ## 현재 단계
 
-Spring MVC 진행 중 — HandlerMapping의 Handler 탐색과 HandlerAdapter의 호출 방식 선택을 실제 DispatcherServlet 요청으로 검증했지만 두 역할의 구분을 재설명하는 복습이 필요한 단계
+Spring MVC 진행 중 — HandlerMapping·HandlerAdapter의 역할 분리와 ArgumentResolver·HttpMessageConverter의 인자 및 본문 변환 경로를 실제 HTTP 요청으로 검증하고, Validation과 예외 처리를 시작할 단계
 
 ## 현재 주제
 
-HandlerMapping과 HandlerAdapter (`needs_review`)
+Validation과 예외 처리 (`pending`)
 
 ## 로드맵 진행 위치
 
 - 상세 기준: `ROADMAP_DETAIL.md`
-- 최근 완료 항목: `MVC-01 DispatcherServlet 요청 처리`
-- 현재 진행 항목: `MVC-02 HandlerMapping과 HandlerAdapter` (`needs_review`)
-- 다음 진행 항목: `MVC-02 HandlerMapping과 HandlerAdapter` 복습 및 완료 기준 재검증
+- 최근 완료 항목: `MVC-03 ArgumentResolver와 HttpMessageConverter`
+- 현재 진행 항목: `MVC-04 Validation과 예외 처리` (`pending`)
+- 다음 진행 항목: `MVC-04 Validation과 예외 처리`
 - 진행 순서: `CON` 완료 후 `WEB → MVC → AOP/TX → JPA → TST/OPS → CAP`
 
 ## 설명할 수 있게 된 것
@@ -101,18 +101,22 @@ HandlerMapping과 HandlerAdapter (`needs_review`)
 - 실제 요청 이벤트는 `dispatcher-servlet → handler-mapping → handler-adapter → controller` 순서로 실행됐다.
 - HandlerMapping이 Handler를 반환하지 않으면 DispatcherServlet은 HandlerAdapter와 Controller를 호출할 수 없다.
 - DispatcherServlet이 탐색과 호출을 위임하면 새 Controller와 호출 방식이 추가되어도 공통 요청 진입점의 코드를 직접 수정하지 않고 전체 흐름 조정 역할을 유지할 수 있다.
+- Handler는 HandlerMapping이 요청을 처리하도록 선택한 대상이고, HandlerAdapter는 선택된 Handler를 지원하는지 `supports(handler)`로 검사한 뒤 `handle()`로 호출하는 별도 협력 객체다.
+- DispatcherServlet은 등록 순서대로 HandlerAdapter 후보를 검사하고, 처음으로 `supports(handler)`가 `true`인 Adapter를 선택한다.
+- 후보 Adapter의 `supports()` 검사는 실제 Handler 호출이 아니며, 선택된 Adapter 하나의 `handle()`만 실행된다.
+- Controller 메서드 호출 전에 각 매개변수에 맞는 ArgumentResolver가 선택되어 실제 인자 값을 준비한다.
+- `@PathVariable`과 `@RequestParam`은 문자열 기반 값 조회와 타입 변환 경로를 사용하고, `@RequestBody`용 ArgumentResolver는 본문 변환을 HttpMessageConverter에 위임한다.
+- HttpMessageConverter의 `read()`는 요청 JSON 본문을 DTO로 만들고, 반환값 처리기가 위임한 `write()`는 Controller의 반환 객체를 JSON 응답 본문으로 만든다.
+- HttpMessageConverter는 HTTP 전체를 변환하지 않고 요청·응답 본문과 Java 객체 사이를 변환한다.
+- 인자 하나라도 타입 변환, 필수 값 조회, JSON 읽기에 실패하면 모든 인자가 준비되지 않으므로 Controller 메서드는 실행되지 않는다.
+- Handler를 찾은 뒤 필수 요청 파라미터가 누락된 경우는 매핑 실패가 아니라 인자 준비 실패이므로 이번 실험에서는 400이 반환됐다.
 
 ## 이번 실험에서 확인한 것
 
-- 하나의 학습용 HandlerMapping이 요청 URI에 따라 `MethodStyleHandler`, `DirectStyleHandler`, `null` 중 하나를 반환하는 경로를 검증했다.
-- DispatcherServlet은 HandlerMapping이 반환한 Handler를 각 HandlerAdapter의 `supports(handler)`에 전달하고, 지원하는 Adapter의 `handle()`을 호출한다.
-- 선택된 HandlerAdapter의 `handle()`이 자신이 지원하는 Handler의 실제 처리 메서드를 호출한다.
-- HandlerMapping이 `null`을 반환하면 HandlerAdapter와 Handler는 호출되지 않고 응답 상태는 `404 Not Found`가 된다.
-
-## 복습이 필요한 것
-
-- Handler는 요청을 실제로 처리하도록 선택된 대상이고, HandlerAdapter는 그 Handler의 타입을 검사하고 호출 방법을 적용하는 객체라는 차이를 자신의 말로 다시 설명해야 한다.
-- HandlerAdapter의 `supports()`가 후보 선택을 위해 호출되는 것과 선택된 Adapter의 `handle()`이 실제 호출되는 것을 구분해야 한다.
+- 실제 내장 서버에 `@PathVariable long`, `@RequestParam boolean`, `@RequestBody` DTO를 함께 사용하는 요청을 보내 세 인자가 준비된 뒤 Controller가 호출되는 흐름을 검증했다.
+- 정상 요청에서 Controller의 반환 객체가 JSON 응답 본문으로 변환되는 것을 검증했다.
+- 잘못된 경로 변수, 필수 요청 파라미터 누락, 깨진 JSON은 각각 400을 반환하고 Controller 호출 횟수가 0인 것을 검증했다.
+- `MVC-02`의 기존 매핑 성공·실패 및 Adapter 선택 테스트와 재설명을 함께 확인하여 완료 기준을 충족했다.
 
 ## 아직 실험으로 검증하지 못한 것
 
@@ -125,7 +129,7 @@ HandlerMapping과 HandlerAdapter (`needs_review`)
 
 - `labs/spring-lab`: Java 17, Spring Boot 4.1.0, Gradle Wrapper 9.5.1
 - 테스트용 웹 환경: `spring-boot-starter-web`, 내장 Tomcat, Java `HttpClient`
-- 2026-08-03 전체 테스트 성공: 29개 실행, 실패·오류·건너뜀 0개
+- 2026-08-06 전체 테스트 성공: 33개 실행, 실패·오류·건너뜀 0개
 - `BeanDestructionScopeTest`: Singleton·Prototype의 생성 횟수, 참조 동일성, 컨텍스트 종료 후 소멸 콜백 횟수를 검증한다.
 - `ContainerLifecycleIntegrationTest`: BeanDefinition 등록부터 의존 Bean 우선 생성, 초기화, Singleton 공개·반복 조회, 컨텍스트 종료 시 소멸까지 전체 이벤트 순서를 검증한다.
 - `HttpRequestResponseBoundaryTest`: 실제 임의 포트 서버에 같은 경로의 GET·POST·PUT 요청을 보내 메서드·본문에 따른 상태 코드와 응답 본문 차이를 검증한다.
@@ -134,12 +138,13 @@ HandlerMapping과 HandlerAdapter (`needs_review`)
 - `FilterListenerDispatcherServletOrderTest`: 정상 요청과 Filter 차단 요청에서 Listener·Filter·Controller 이벤트, HTTP 상태 코드, `chain.doFilter()` 호출 여부를 검증한다.
 - `DispatcherServletDelegationTest`: 실제 DispatcherServlet이 HandlerMapping에서 Handler를 찾고 HandlerAdapter에 호출을 위임해 Controller까지 도달하는 이벤트 순서를 검증한다.
 - `HandlerMappingAdapterSeparationTest`: 하나의 HandlerMapping이 서로 다른 Handler를 반환할 때 `supports()`로 선택된 HandlerAdapter만 Handler를 호출하고, 매핑 실패 시 Adapter 호출 없이 404가 되는 경로를 검증한다.
+- `ArgumentResolverMessageConverterTest`: 경로 변수·요청 파라미터·JSON 본문의 정상 인자 준비와 응답 JSON 변환, 세 가지 인자 준비 실패 시 Controller 호출 중단을 검증한다.
 
 ## 다음 행동
 
-1. Handler와 HandlerAdapter를 `호출 대상`과 `호출 방법을 아는 객체`로 구분해 실제 테스트 객체에 대입한다.
-2. `HandlerMapping → Handler 반환 → HandlerAdapter.supports(handler) → 선택된 Adapter.handle() → Handler 호출` 순서를 재설명한다.
-3. 새로운 호출 방식의 Handler가 추가될 때 HandlerAdapter 확장으로 DispatcherServlet의 공통 흐름을 유지하는 이유를 설명해 `MVC-02` 완료 기준을 다시 검증한다.
+1. `MVC-04` 시작 시 잘못된 타입, 검증 위반, 비즈니스 예외가 각각 어느 단계에서 발생할지 먼저 예측한다.
+2. 세 실패 경로의 Controller 진입 여부와 기본 응답을 assertion으로 비교한다.
+3. `@ControllerAdvice`가 각 예외를 어떤 응답으로 바꾸는지 실행 순서와 처리 주체로 설명한다.
 
 ## 다음 세션 시작 요청
 
@@ -147,10 +152,10 @@ HandlerMapping과 HandlerAdapter (`needs_review`)
 AGENTS.md, ROADMAP_DETAIL.md, CURRENT.md를 모두 읽고,
 현재 roadmap item, 선수 항목, 오늘의 핵심 개념,
 최소 실험과 완료 기준을 먼저 알려 줘.
-`MVC-02 HandlerMapping과 HandlerAdapter`는 실험은 성공했지만 `needs_review` 상태야.
-Handler와 HandlerAdapter를 실제 `HandlerMappingAdapterSeparationTest` 객체에 대입해 구분하게 하고,
-`supports()` 후보 검사와 선택된 Adapter의 `handle()` 실행 차이를 먼저 회상시켜 줘.
-회상이 끝나면 Handler 탐색과 호출 방식을 분리한 이유를 실행 순서로 다시 설명하게 해 줘.
+`MVC-02 HandlerMapping과 HandlerAdapter`와 `MVC-03 ArgumentResolver와 HttpMessageConverter`는 completed 상태야.
+다음 순서인 `MVC-04 Validation과 예외 처리`를 시작해 줘.
+잘못된 타입·검증 위반·비즈니스 예외가 발생하는 위치와 Controller 진입 여부를 먼저 예측하게 하고,
+세 실패의 응답 경로와 `@ControllerAdvice`의 처리 책임을 비교하는 최소 실험을 준비해 줘.
 문서에 지정되지 않은 다음 주제를 임의로 추가하지 마.
 테스트 보일러플레이트는 제공하고 실행 순서 예측과 assertion에 집중시켜 줘.
 ```

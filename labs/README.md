@@ -12,7 +12,7 @@ Spring 개념을 격리해 검증하는 실험 코드를 둡니다.
 - 테스트 웹 환경: `spring-boot-starter-web`, 내장 Tomcat, Java `HttpClient`
 - 테스트 실행: `labs/spring-lab`에서 `.\gradlew.bat test`
 
-2026-08-03 기준 전체 테스트 29개가 성공했습니다. 실패·오류·건너뜀 테스트는 없습니다.
+2026-08-06 기준 전체 테스트 33개가 성공했습니다. 실패·오류·건너뜀 테스트는 없습니다.
 
 - `SpringLabApplicationTests`: Spring 컨텍스트 로딩
 - `SingletonSharedStateTest`: 메서드 인자로 같은 변경 가능한 리스트를 공유할 때 호출 결과가 간섭하는지 검증
@@ -31,6 +31,7 @@ Spring 개념을 격리해 검증하는 실험 코드를 둡니다.
 - `FilterListenerDispatcherServletOrderTest`: 정상 요청과 Filter 차단 요청의 HTTP 상태 코드, Listener·Filter·Controller 이벤트 순서, `chain.doFilter()`의 진행 통제를 검증
 - `DispatcherServletDelegationTest`: 실제 DispatcherServlet의 진입부터 HandlerMapping 탐색, HandlerAdapter 호출 위임, Controller 실행까지 이벤트 순서를 검증
 - `HandlerMappingAdapterSeparationTest`: 하나의 HandlerMapping이 경로별로 다른 Handler를 반환할 때 지원 가능한 HandlerAdapter만 선택되어 Handler를 호출하고, 매핑 실패 시 Adapter 호출 없이 404가 되는 흐름을 검증
+- `ArgumentResolverMessageConverterTest`: 경로 변수·요청 파라미터·JSON 본문을 Controller 인자로 준비하고 반환 객체를 JSON으로 쓰는 정상 경로와, 타입 오류·필수 파라미터 누락·깨진 JSON에서 Controller 호출이 중단되는 경로를 검증
 
 ```text
 spring-lab/src/test/java/com/study/springlab/
@@ -72,7 +73,8 @@ spring-lab/src/test/java/webfoundation/
 
 spring-lab/src/test/java/mvc/
 ├─ DispatcherServletDelegationTest.java
-└─ HandlerMappingAdapterSeparationTest.java
+├─ HandlerMappingAdapterSeparationTest.java
+└─ ArgumentResolverMessageConverterTest.java
 ```
 
 모든 실험에는 다음 내용을 남깁니다.
