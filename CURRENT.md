@@ -1,21 +1,21 @@
 # Current Learning Context
 
-마지막 갱신일: 2026-08-06
+마지막 갱신일: 2026-08-09
 
 ## 현재 단계
 
-Spring MVC 진행 중 — HandlerMapping·HandlerAdapter의 역할 분리와 ArgumentResolver·HttpMessageConverter의 인자 및 본문 변환 경로를 실제 HTTP 요청으로 검증하고, Validation과 예외 처리를 시작할 단계
+Spring MVC 진행 중 — 타입 변환 실패·DTO 검증 실패·비즈니스 예외의 발생 위치와 `@RestControllerAdvice` 처리 경로를 실제 HTTP 요청으로 검증하고, Filter·Interceptor·AOP 경계를 시작할 단계
 
 ## 현재 주제
 
-Validation과 예외 처리 (`pending`)
+Filter, Interceptor, AOP 경계 (`pending`)
 
 ## 로드맵 진행 위치
 
 - 상세 기준: `ROADMAP_DETAIL.md`
-- 최근 완료 항목: `MVC-03 ArgumentResolver와 HttpMessageConverter`
-- 현재 진행 항목: `MVC-04 Validation과 예외 처리` (`pending`)
-- 다음 진행 항목: `MVC-04 Validation과 예외 처리`
+- 최근 완료 항목: `MVC-04 Validation과 예외 처리`
+- 현재 진행 항목: `MVC-05 Filter, Interceptor, AOP 경계` (`pending`)
+- 다음 진행 항목: `MVC-05 Filter, Interceptor, AOP 경계`
 - 진행 순서: `CON` 완료 후 `WEB → MVC → AOP/TX → JPA → TST/OPS → CAP`
 
 ## 설명할 수 있게 된 것
@@ -110,6 +110,11 @@ Validation과 예외 처리 (`pending`)
 - HttpMessageConverter는 HTTP 전체를 변환하지 않고 요청·응답 본문과 Java 객체 사이를 변환한다.
 - 인자 하나라도 타입 변환, 필수 값 조회, JSON 읽기에 실패하면 모든 인자가 준비되지 않으므로 Controller 메서드는 실행되지 않는다.
 - Handler를 찾은 뒤 필수 요청 파라미터가 누락된 경우는 매핑 실패가 아니라 인자 준비 실패이므로 이번 실험에서는 400이 반환됐다.
+- `/orders/abc`도 `/orders/{id}` 경로 패턴에는 일치하며, 실패는 HandlerMapping이 아니라 Controller 인자를 `long`으로 변환하는 단계에서 발생한다.
+- 정상 JSON은 먼저 DTO로 변환되고, 그 뒤 `@Valid`와 Bean Validation 제약조건이 검사되므로 DTO 생성과 검증은 별도 단계다.
+- 타입 변환 실패와 DTO 검증 실패는 Controller 호출 전에 발생하지만, 재고 없음 같은 비즈니스 예외는 인자 준비와 검증이 끝나 Controller에 진입한 뒤 발생한다.
+- 요청 처리 중 발생한 예외는 DispatcherServlet이 `HandlerExceptionResolver` 체인에 위임하고, `ExceptionHandlerExceptionResolver`가 일치하는 `@ExceptionHandler`를 찾아 HTTP 오류 응답으로 변환할 수 있다.
+- `@RestControllerAdvice`는 Controller 메서드 밖의 Spring Bean이므로 Controller 진입 전의 인자 처리 예외와 진입 후의 비즈니스 예외를 모두 처리할 수 있다.
 
 ## 이번 실험에서 확인한 것
 
@@ -117,6 +122,10 @@ Validation과 예외 처리 (`pending`)
 - 정상 요청에서 Controller의 반환 객체가 JSON 응답 본문으로 변환되는 것을 검증했다.
 - 잘못된 경로 변수, 필수 요청 파라미터 누락, 깨진 JSON은 각각 400을 반환하고 Controller 호출 횟수가 0인 것을 검증했다.
 - `MVC-02`의 기존 매핑 성공·실패 및 Adapter 선택 테스트와 재설명을 함께 확인하여 완료 기준을 충족했다.
+- 잘못된 경로 변수 타입은 DTO를 만들거나 Controller를 호출하지 않고 Advice가 400 `TYPE_MISMATCH`로 변환하는 것을 검증했다.
+- 정상 JSON으로 DTO를 만든 뒤 Bean Validation이 실패하면 Controller를 호출하지 않고 Advice가 400 `VALIDATION_FAILED`로 변환하는 것을 검증했다.
+- DTO 검증을 통과한 뒤 Controller에서 발생한 비즈니스 예외는 Controller 호출 횟수가 1이고 Advice가 409 `SOLD_OUT`으로 변환하는 것을 검증했다.
+- `ValidationExceptionAdviceTest` 3개를 포함한 전체 테스트 36개가 성공하여 `MVC-04` 완료 기준을 확인했다.
 
 ## 아직 실험으로 검증하지 못한 것
 
@@ -128,8 +137,8 @@ Validation과 예외 처리 (`pending`)
 ## 현재 실습 환경
 
 - `labs/spring-lab`: Java 17, Spring Boot 4.1.0, Gradle Wrapper 9.5.1
-- 테스트용 웹 환경: `spring-boot-starter-web`, 내장 Tomcat, Java `HttpClient`
-- 2026-08-06 전체 테스트 성공: 33개 실행, 실패·오류·건너뜀 0개
+- 테스트용 웹 환경: `spring-boot-starter-web`, `spring-boot-starter-validation`, 내장 Tomcat, Java `HttpClient`
+- 2026-08-09 전체 테스트 성공: 36개 실행, 실패·오류·건너뜀 0개
 - `BeanDestructionScopeTest`: Singleton·Prototype의 생성 횟수, 참조 동일성, 컨텍스트 종료 후 소멸 콜백 횟수를 검증한다.
 - `ContainerLifecycleIntegrationTest`: BeanDefinition 등록부터 의존 Bean 우선 생성, 초기화, Singleton 공개·반복 조회, 컨텍스트 종료 시 소멸까지 전체 이벤트 순서를 검증한다.
 - `HttpRequestResponseBoundaryTest`: 실제 임의 포트 서버에 같은 경로의 GET·POST·PUT 요청을 보내 메서드·본문에 따른 상태 코드와 응답 본문 차이를 검증한다.
@@ -139,12 +148,13 @@ Validation과 예외 처리 (`pending`)
 - `DispatcherServletDelegationTest`: 실제 DispatcherServlet이 HandlerMapping에서 Handler를 찾고 HandlerAdapter에 호출을 위임해 Controller까지 도달하는 이벤트 순서를 검증한다.
 - `HandlerMappingAdapterSeparationTest`: 하나의 HandlerMapping이 서로 다른 Handler를 반환할 때 `supports()`로 선택된 HandlerAdapter만 Handler를 호출하고, 매핑 실패 시 Adapter 호출 없이 404가 되는 경로를 검증한다.
 - `ArgumentResolverMessageConverterTest`: 경로 변수·요청 파라미터·JSON 본문의 정상 인자 준비와 응답 JSON 변환, 세 가지 인자 준비 실패 시 Controller 호출 중단을 검증한다.
+- `ValidationExceptionAdviceTest`: 경로 변수 타입 불일치·DTO 검증 위반·비즈니스 예외의 Controller 진입 여부와 `@RestControllerAdvice`가 만든 상태 코드·오류 본문을 검증한다.
 
 ## 다음 행동
 
-1. `MVC-04` 시작 시 잘못된 타입, 검증 위반, 비즈니스 예외가 각각 어느 단계에서 발생할지 먼저 예측한다.
-2. 세 실패 경로의 Controller 진입 여부와 기본 응답을 assertion으로 비교한다.
-3. `@ControllerAdvice`가 각 예외를 어떤 응답으로 바꾸는지 실행 순서와 처리 주체로 설명한다.
+1. `MVC-05` 시작 시 Filter·Interceptor·AOP가 각각 요청 처리 흐름의 어느 위치에서 실행될지 먼저 예측한다.
+2. 세 확장 지점의 전후 이벤트와 예외 전달 범위를 assertion으로 비교한다.
+3. 인증·로깅·실행 시간 측정을 어느 위치에 둘지 사용 가능한 컨텍스트와 적용 범위를 근거로 선택한다.
 
 ## 다음 세션 시작 요청
 
@@ -152,10 +162,10 @@ Validation과 예외 처리 (`pending`)
 AGENTS.md, ROADMAP_DETAIL.md, CURRENT.md를 모두 읽고,
 현재 roadmap item, 선수 항목, 오늘의 핵심 개념,
 최소 실험과 완료 기준을 먼저 알려 줘.
-`MVC-02 HandlerMapping과 HandlerAdapter`와 `MVC-03 ArgumentResolver와 HttpMessageConverter`는 completed 상태야.
-다음 순서인 `MVC-04 Validation과 예외 처리`를 시작해 줘.
-잘못된 타입·검증 위반·비즈니스 예외가 발생하는 위치와 Controller 진입 여부를 먼저 예측하게 하고,
-세 실패의 응답 경로와 `@ControllerAdvice`의 처리 책임을 비교하는 최소 실험을 준비해 줘.
+`MVC-04 Validation과 예외 처리`는 completed 상태야.
+다음 순서인 `MVC-05 Filter, Interceptor, AOP 경계`를 시작해 줘.
+Filter·Interceptor·AOP가 실행되는 위치와 사용할 수 있는 컨텍스트를 먼저 예측하게 하고,
+세 확장 지점의 전후 이벤트와 예외 전달 범위를 비교하는 최소 실험을 준비해 줘.
 문서에 지정되지 않은 다음 주제를 임의로 추가하지 마.
 테스트 보일러플레이트는 제공하고 실행 순서 예측과 assertion에 집중시켜 줘.
 ```

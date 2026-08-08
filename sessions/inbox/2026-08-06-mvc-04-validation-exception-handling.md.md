@@ -4,7 +4,7 @@ environment: company_restricted
 roadmap_item: MVC-04 Validation과 예외 처리
 completion_status: completed
 recommended_next: MVC-05 Filter, Interceptor, AOP 경계
-processed: false
+processed: true
 ---
 
 # MVC-04 Validation과 예외 처리
