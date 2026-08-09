@@ -27,6 +27,8 @@ dependencies {
 	testImplementation 'org.springframework.boot:spring-boot-starter-aspectj'
 	testImplementation 'org.springframework.boot:spring-boot-starter-web'
 	testImplementation 'org.springframework.boot:spring-boot-starter-validation'
+	testImplementation 'org.springframework:spring-jdbc'
+	testImplementation 'com.h2database:h2'
 
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }

@@ -4,18 +4,18 @@
 
 ## 현재 단계
 
-AOP/TX 진행 중 — JDK Dynamic Proxy와 CGLIB의 타입·제약 실험은 완료했지만 `invocation.proceed()`의 호출 위임 설명을 보완할 단계
+AOP/TX 진행 중 — 트랜잭션 시작과 스레드 연결 Connection 실험을 완료하고 flush·commit·rollback 주제로 이동할 단계
 
 ## 현재 주제
 
-JDK Dynamic Proxy와 CGLIB (`needs_review`)
+트랜잭션 시작과 Connection (`completed`)
 
 ## 로드맵 진행 위치
 
 - 상세 기준: `ROADMAP_DETAIL.md`
-- 최근 완료 항목: `MVC-05 Filter, Interceptor, AOP 경계`
-- 현재 진행 항목: `AOP-01 JDK Dynamic Proxy와 CGLIB` (`needs_review`)
-- 다음 진행 항목: `AOP-01 JDK Dynamic Proxy와 CGLIB`
+- 최근 완료 항목: `TX-01 트랜잭션 시작과 Connection`
+- 현재 진행 항목: 없음
+- 다음 진행 항목: `TX-02 flush, commit, rollback`
 - 진행 순서: `CON` 완료 후 `WEB → MVC → AOP/TX → JPA → TST/OPS → CAP`
 
 ## 설명할 수 있게 된 것
@@ -130,6 +130,20 @@ JDK Dynamic Proxy와 CGLIB (`needs_review`)
 - JDK 프록시는 원본 구현 클래스 타입으로 캐스팅할 수 없지만 CGLIB 프록시는 구현 클래스의 하위 타입이므로 캐스팅할 수 있다. 캐스팅은 새 객체를 만들지 않아 전후 참조는 동일하다.
 - CGLIB는 대상 클래스를 상속해야 하므로 `final class`의 프록시 생성은 실패한다.
 - 클래스가 상속 가능하더라도 `final method`는 재정의할 수 없어 CGLIB 프록시 생성은 성공하지만 해당 메서드에 Advice가 적용되지 않는다.
+- Advice의 `invocation.proceed()`는 다음 Advice 또는 최종 원본 target으로 호출 체인을 진행시키며, 반환값은 역순으로 Advice와 프록시를 거쳐 외부 호출자에게 전달된다.
+- Advice가 `proceed()`를 호출하지 않고 값을 바로 반환하면 원본 target 메서드는 실행되지 않고 Advice가 만든 값이 프록시의 반환값이 된다.
+- Pointcut은 Advice를 적용할 메서드 호출을 선택하는 규칙이고, Advice는 선택된 호출 전후에 실행할 부가 기능이다.
+- 외부의 `proxy.inner()` 호출은 프록시를 통과해 Pointcut 검사와 Advice 실행 기회를 얻는다.
+- `target.outer()` 내부의 `this.inner()`에서 `this`는 target이므로 호출은 `target → target`으로 진행되고 프록시를 다시 통과하지 않는다.
+- self-invocation은 Advice를 우회하지만 원본 `inner()`의 비즈니스 로직 자체는 정상 실행된다.
+- Pointcut이 `outer()`와 `inner()`를 모두 선택해도 외부 `proxy.outer()`의 Advice만 적용되고, 내부 `this.inner()`는 프록시를 거치지 않아 별도의 Advice가 적용되지 않는다.
+- `@Transactional`은 트랜잭션 적용 대상을 나타내는 메타데이터이며 annotation 자체가 트랜잭션을 시작하지 않는다.
+- 트랜잭션 프록시는 외부 호출을 가로채 `TransactionInterceptor`가 실행되는 호출 사슬로 진입시킨다.
+- `TransactionInterceptor`는 `PlatformTransactionManager`에 트랜잭션 시작과 완료를 요청하고 `proceed()`로 원본 target 메서드를 호출한다.
+- 현재 JDBC 실험의 `DataSourceTransactionManager`는 DataSource에서 Connection을 얻어 실제 JDBC 트랜잭션을 준비하고 현재 스레드에 자원을 연결한다.
+- target 메서드 안에서는 트랜잭션 활성 상태와 DataSource 자원 연결 상태가 모두 `true`였고, `DataSourceUtils`로 두 번 얻은 Connection 참조가 같았다.
+- `@Transactional` 메서드 호출 전과 반환 후에는 트랜잭션 활성 상태가 `false`였으므로 트랜잭션 경계가 프록시 호출 내부에 한정됨을 확인했다.
+- 같은 스레드의 Repository나 `JdbcTemplate`은 Connection을 매개변수로 전달받지 않아도 `DataSourceUtils`를 통해 현재 트랜잭션에 연결된 자원을 찾을 수 있다.
 
 ## 이번 실험에서 확인한 것
 
@@ -149,12 +163,18 @@ JDK Dynamic Proxy와 CGLIB (`needs_review`)
 - JDK Dynamic Proxy와 CGLIB 프록시의 참조 차이, 인터페이스·구현 클래스 타입 관계, 런타임 클래스 차이와 `advice-before → target → advice-after-returning → advice-finally` 호출 위임 순서를 검증했다.
 - JDK 프록시의 구현 클래스 캐스팅 실패와 CGLIB 프록시의 구현 클래스 캐스팅 성공 및 참조 동일성을 검증했다.
 - CGLIB에서 `final class`는 프록시 생성에 실패하고 `final method`는 프록시 생성 후에도 Advice가 적용되지 않는 차이를 검증했다.
-- `JdkDynamicProxyCglibTest` 6개와 전체 테스트 45개가 성공했지만, `invocation.proceed()`의 호출 위임 재설명이 부족해 `AOP-01`은 `needs_review`로 유지한다.
+- `JdkDynamicProxyCglibTest`의 차단 Advice 결과와 호출 체인을 재설명해 `AOP-01` 완료 기준을 충족했다.
+- 외부 `proxy.inner()`에서는 `advice-before → target-inner → advice-after`, `proxy.outer()`의 self-invocation에서는 `target-outer → target-inner`가 기록되는 차이를 검증했다.
+- Pointcut이 `outer()`와 `inner()`를 모두 선택하는 반례에서도 내부 `this.inner()`가 `target → target`으로 호출되어 Advice를 우회한다고 재설명해 `AOP-02` 완료 기준을 충족했다.
+- `SelfInvocationAdviceTest` 2개를 포함한 전체 테스트 47개가 성공했다.
+- `TransactionStartConnectionTest`에서 호출 전 `active=false`, target 내부 `active=true`·`resourceBound=true`·두 Connection 참조 동일, 호출 후 `active=false`를 assertion으로 검증했다.
+- 프록시·`TransactionInterceptor`·`DataSourceTransactionManager`의 책임을 나누어 재설명해 `TX-01` 완료 기준을 충족했다.
+- `TransactionStartConnectionTest` 1개를 포함한 전체 테스트 48개가 성공했다.
 
 ## 아직 실험으로 검증하지 못한 것
 
 - Spring 내부에서 생성자 선택·매개변수 의존성 해결·생성자 호출을 담당하는 실제 클래스와 메서드
-- Spring 프록시의 self-invocation과 `@Transactional` 동작 원리
+- `@Transactional` self-invocation이 실제 트랜잭션 활성 상태에 미치는 영향
 - JPA, Hibernate, Spring Data JPA의 역할 차이
 - 영속성 컨텍스트와 flush 시점
 
@@ -162,7 +182,8 @@ JDK Dynamic Proxy와 CGLIB (`needs_review`)
 
 - `labs/spring-lab`: Java 17, Spring Boot 4.1.0, Gradle Wrapper 9.5.1
 - 테스트용 웹 환경: `spring-boot-starter-web`, `spring-boot-starter-validation`, `spring-boot-starter-aspectj`, 내장 Tomcat, Java `HttpClient`
-- 2026-08-09 전체 테스트 성공: 45개 실행, 실패·오류·건너뜀 0개
+- 테스트용 트랜잭션 환경: Spring JDBC, H2 인메모리 DB, `DataSourceTransactionManager`
+- 2026-08-09 전체 테스트 성공: 48개 실행, 실패·오류·건너뜀 0개
 - `BeanDestructionScopeTest`: Singleton·Prototype의 생성 횟수, 참조 동일성, 컨텍스트 종료 후 소멸 콜백 횟수를 검증한다.
 - `ContainerLifecycleIntegrationTest`: BeanDefinition 등록부터 의존 Bean 우선 생성, 초기화, Singleton 공개·반복 조회, 컨텍스트 종료 시 소멸까지 전체 이벤트 순서를 검증한다.
 - `HttpRequestResponseBoundaryTest`: 실제 임의 포트 서버에 같은 경로의 GET·POST·PUT 요청을 보내 메서드·본문에 따른 상태 코드와 응답 본문 차이를 검증한다.
@@ -175,20 +196,21 @@ JDK Dynamic Proxy와 CGLIB (`needs_review`)
 - `ValidationExceptionAdviceTest`: 경로 변수 타입 불일치·DTO 검증 위반·비즈니스 예외의 Controller 진입 여부와 `@RestControllerAdvice`가 만든 상태 코드·오류 본문을 검증한다.
 - `FilterInterceptorAopBoundaryTest`: 정상 요청·Controller 예외·Filter 예외에서 Filter·Interceptor·AOP·Controller·Advice의 이벤트 순서와 예외 전달 범위를 검증한다.
 - `JdkDynamicProxyCglibTest`: JDK Dynamic Proxy·CGLIB의 런타임 타입과 원본 호출 위임, 구현 클래스 캐스팅, `final` 클래스·메서드 제약, `proceed()` 없는 Advice의 원본 호출 차단을 검증한다.
+- `SelfInvocationAdviceTest`: 외부 `inner()` 호출과 같은 target 내부의 `this.inner()` 호출에서 Pointcut·Advice 적용 여부와 원본 메서드 실행 이벤트를 비교한다.
+- `TransactionStartConnectionTest`: 트랜잭션 호출 전·내부·반환 후 활성 상태, DataSource 자원 연결 상태와 같은 트랜잭션의 Connection 참조 동일성을 검증한다.
 
 ## 다음 행동
 
-1. Advice가 `invocation.proceed()`를 호출하는 경우와 호출하지 않고 값을 반환하는 경우를 비교한다.
-2. `proceed()`가 다음 Advice 또는 원본 target 호출로 진행시키는 역할을 이벤트와 반환값 assertion으로 확인한다.
-3. 호출 위임을 다시 설명해 `AOP-01` 완료 기준을 충족하면 별도 세션으로 끊지 않고 같은 세션에서 `AOP-02`를 바로 시작한다.
-4. `AOP-01` 복습이 충분하지 않으면 `needs_review`를 유지하고 `AOP-02`는 시작하지 않는다.
+1. SQL 실행, flush, DB commit을 서로 다른 사건으로 구분하는 사전 개념을 설명한다.
+2. 명시적 flush 전후와 트랜잭션 완료 전후의 SQL 실행 및 DB 관찰 결과를 예측한다.
+3. 정상 반환과 예외 경로의 DB 상태를 관찰 가능한 assertion으로 비교한다.
+4. SQL이 실행됐다는 사실만으로 최종 commit을 단정할 수 없는 이유를 재설명한다.
 
-## 다음 세션 운영 합의
+## 다음 세션 준비
 
-- 사용자 요청: 다음 강의에서 `AOP-01` 복습과 `AOP-02` 학습을 함께 진행한다.
-- 선수 항목 영향: `AOP-02`의 선수 항목은 `AOP-01 completed`이므로, 같은 세션의 앞부분에서 호출 위임 재설명과 복습 검증을 먼저 통과해야 한다.
-- 진행 순서: `AOP-01 proceed 복습 → 완료 판단 → 통과 시 즉시 AOP-02 진단·실험`.
-- 순서 변경 이유: 복습과 연결 주제를 별도 세션으로 분리하지 않고 같은 강의 안에서 연속해서 학습하겠다는 사용자의 명시적 요청.
+- `TX-02`의 선수 항목인 `TX-01`은 트랜잭션 활성 상태·스레드 연결 자원·Connection 동일성 실험 및 호출 경로 재설명을 통해 완료했다.
+- 다음 세션에서는 로드맵 순서대로 `TX-02 flush, commit, rollback`만 시작한다.
+- 실험 보일러플레이트는 제공하고, 학습자는 실행 전 SQL 실행 시점과 최종 DB 상태를 예측하고 핵심 assertion을 작성한다.
 
 ## 다음 세션 시작 요청
 
@@ -196,11 +218,10 @@ JDK Dynamic Proxy와 CGLIB (`needs_review`)
 AGENTS.md, ROADMAP_DETAIL.md, CURRENT.md를 모두 읽고,
 현재 roadmap item, 선수 항목, 오늘의 핵심 개념,
 최소 실험과 완료 기준을 먼저 알려 줘.
-`AOP-01 JDK Dynamic Proxy와 CGLIB`는 needs_review 상태야.
-`invocation.proceed()`를 호출하는 Advice와 호출하지 않는 Advice의 원본 target 실행 여부를 먼저 복습해 줘.
-반환값과 target 이벤트 assertion으로 호출 위임을 다시 검증하고,
-학습자가 호출 경로를 재설명한 뒤에만 다음 순서인 `AOP-02 Advice 적용과 self-invocation`으로 이동해 줘.
-복습을 통과하면 세션을 종료하지 말고 같은 강의에서 바로 `AOP-02`의 사전 개념 설명, 진단, 최소 실험까지 진행해 줘.
+`TX-01 트랜잭션 시작과 Connection`까지 completed 상태야.
+다음 순서인 `TX-02 flush, commit, rollback`의 사전 개념 설명과 진단부터 시작해 줘.
+flush와 commit 시점을 분리하고 정상 반환·예외 전후의 SQL 실행과 최종 DB 상태를 비교하는 최소 실험을 준비하되,
+실행 전에 학습자가 결과와 이유를 예측하고 핵심 assertion을 작성하게 해 줘.
 문서에 지정되지 않은 다음 주제를 임의로 추가하지 마.
 테스트 보일러플레이트는 제공하고 실행 순서 예측과 assertion에 집중시켜 줘.
 ```
