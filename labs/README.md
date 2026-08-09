@@ -12,7 +12,7 @@ Spring 개념을 격리해 검증하는 실험 코드를 둡니다.
 - 테스트 웹 환경: `spring-boot-starter-web`, `spring-boot-starter-validation`, `spring-boot-starter-aspectj`, 내장 Tomcat, Java `HttpClient`
 - 테스트 실행: `labs/spring-lab`에서 `.\gradlew.bat test`
 
-2026-08-09 기준 전체 테스트 39개가 성공했습니다. 실패·오류·건너뜀 테스트는 없습니다.
+2026-08-09 기준 전체 테스트 45개가 성공했습니다. 실패·오류·건너뜀 테스트는 없습니다.
 
 - `SpringLabApplicationTests`: Spring 컨텍스트 로딩
 - `SingletonSharedStateTest`: 메서드 인자로 같은 변경 가능한 리스트를 공유할 때 호출 결과가 간섭하는지 검증
@@ -34,6 +34,7 @@ Spring 개념을 격리해 검증하는 실험 코드를 둡니다.
 - `ArgumentResolverMessageConverterTest`: 경로 변수·요청 파라미터·JSON 본문을 Controller 인자로 준비하고 반환 객체를 JSON으로 쓰는 정상 경로와, 타입 오류·필수 파라미터 누락·깨진 JSON에서 Controller 호출이 중단되는 경로를 검증
 - `ValidationExceptionAdviceTest`: 경로 변수 타입 불일치·DTO 검증 위반·비즈니스 예외가 발생하는 위치와 Controller 진입 여부, `@RestControllerAdvice`가 변환한 상태 코드·오류 본문을 검증
 - `FilterInterceptorAopBoundaryTest`: 정상 요청·Controller 예외·Filter 예외에서 Filter·Interceptor·AOP·Controller·Advice의 전후 이벤트와 예외 전달 범위를 검증
+- `JdkDynamicProxyCglibTest`: JDK Dynamic Proxy·CGLIB의 런타임 타입과 원본 호출 위임, 구현 클래스 캐스팅, `final` 클래스·메서드 제약, `proceed()` 없는 Advice의 원본 호출 차단을 검증
 
 ```text
 spring-lab/src/test/java/com/study/springlab/
@@ -79,6 +80,9 @@ spring-lab/src/test/java/mvc/
 ├─ ArgumentResolverMessageConverterTest.java
 ├─ ValidationExceptionAdviceTest.java
 └─ FilterInterceptorAopBoundaryTest.java
+
+spring-lab/src/test/java/aop/
+└─ JdkDynamicProxyCglibTest.java
 ```
 
 모든 실험에는 다음 내용을 남깁니다.

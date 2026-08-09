@@ -4,17 +4,17 @@
 
 ## 현재 단계
 
-Spring MVC 완료 — Filter·Interceptor·AOP의 실행 위치와 예외 전달 범위를 실제 HTTP 요청으로 검증하고, JDK Dynamic Proxy와 CGLIB를 시작할 단계
+AOP/TX 진행 중 — JDK Dynamic Proxy와 CGLIB의 타입·제약 실험은 완료했지만 `invocation.proceed()`의 호출 위임 설명을 보완할 단계
 
 ## 현재 주제
 
-JDK Dynamic Proxy와 CGLIB (`pending`)
+JDK Dynamic Proxy와 CGLIB (`needs_review`)
 
 ## 로드맵 진행 위치
 
 - 상세 기준: `ROADMAP_DETAIL.md`
 - 최근 완료 항목: `MVC-05 Filter, Interceptor, AOP 경계`
-- 현재 진행 항목: `AOP-01 JDK Dynamic Proxy와 CGLIB` (`pending`)
+- 현재 진행 항목: `AOP-01 JDK Dynamic Proxy와 CGLIB` (`needs_review`)
 - 다음 진행 항목: `AOP-01 JDK Dynamic Proxy와 CGLIB`
 - 진행 순서: `CON` 완료 후 `WEB → MVC → AOP/TX → JPA → TST/OPS → CAP`
 
@@ -124,6 +124,12 @@ JDK Dynamic Proxy와 CGLIB (`pending`)
 - Filter가 `chain.doFilter()` 전에 예외를 던지면 DispatcherServlet에 진입하지 않으므로 Interceptor·AOP·Controller와 MVC의 `@RestControllerAdvice`는 실행되지 않는다.
 - Aspect가 등록돼도 포인트컷이 대상 Bean 이름이나 메서드와 일치하지 않으면 AOP 이벤트가 실행되지 않는다.
 - AOP는 Controller에 한정되지 않으며, HTTP·배치 등 호출자와 무관하게 포인트컷과 일치하고 프록시를 통과한 Spring Bean 메서드 호출에 적용할 수 있다.
+- JDK Dynamic Proxy는 원본 구현 클래스의 하위 클래스가 아니라 대상 인터페이스를 구현하는 별도의 런타임 프록시 클래스다.
+- CGLIB 프록시는 원본 구현 클래스의 하위 클래스로 생성되므로 구현 클래스와 그 클래스가 구현한 인터페이스 타입 모두에 대입할 수 있다.
+- 두 프록시 모두 원본 객체와는 참조 및 런타임 클래스가 다른 별도 객체이며, Advice 실행 뒤 원본 객체에 메서드 호출을 위임한다.
+- JDK 프록시는 원본 구현 클래스 타입으로 캐스팅할 수 없지만 CGLIB 프록시는 구현 클래스의 하위 타입이므로 캐스팅할 수 있다. 캐스팅은 새 객체를 만들지 않아 전후 참조는 동일하다.
+- CGLIB는 대상 클래스를 상속해야 하므로 `final class`의 프록시 생성은 실패한다.
+- 클래스가 상속 가능하더라도 `final method`는 재정의할 수 없어 CGLIB 프록시 생성은 성공하지만 해당 메서드에 Advice가 적용되지 않는다.
 
 ## 이번 실험에서 확인한 것
 
@@ -140,11 +146,14 @@ JDK Dynamic Proxy와 CGLIB (`pending`)
 - Filter가 DispatcherServlet 진입 전에 예외를 던지면 Filter 이벤트만 기록되고 Advice를 포함한 MVC 확장 지점이 실행되지 않으며 500이 반환되는 것을 검증했다.
 - AOP 포인트컷의 Bean 이름 불일치로 AOP 이벤트가 누락되는 실패를 재현하고, 명시적인 Bean 이름 등록 후 같은 assertion이 통과하는 것을 확인했다.
 - `FilterInterceptorAopBoundaryTest` 3개를 포함한 전체 테스트 39개가 성공하여 `MVC-05` 완료 기준을 확인했다.
+- JDK Dynamic Proxy와 CGLIB 프록시의 참조 차이, 인터페이스·구현 클래스 타입 관계, 런타임 클래스 차이와 `advice-before → target → advice-after-returning → advice-finally` 호출 위임 순서를 검증했다.
+- JDK 프록시의 구현 클래스 캐스팅 실패와 CGLIB 프록시의 구현 클래스 캐스팅 성공 및 참조 동일성을 검증했다.
+- CGLIB에서 `final class`는 프록시 생성에 실패하고 `final method`는 프록시 생성 후에도 Advice가 적용되지 않는 차이를 검증했다.
+- `JdkDynamicProxyCglibTest` 6개와 전체 테스트 45개가 성공했지만, `invocation.proceed()`의 호출 위임 재설명이 부족해 `AOP-01`은 `needs_review`로 유지한다.
 
 ## 아직 실험으로 검증하지 못한 것
 
 - Spring 내부에서 생성자 선택·매개변수 의존성 해결·생성자 호출을 담당하는 실제 클래스와 메서드
-- JDK Dynamic Proxy와 CGLIB의 런타임 타입·호출 위임 차이
 - Spring 프록시의 self-invocation과 `@Transactional` 동작 원리
 - JPA, Hibernate, Spring Data JPA의 역할 차이
 - 영속성 컨텍스트와 flush 시점
@@ -153,7 +162,7 @@ JDK Dynamic Proxy와 CGLIB (`pending`)
 
 - `labs/spring-lab`: Java 17, Spring Boot 4.1.0, Gradle Wrapper 9.5.1
 - 테스트용 웹 환경: `spring-boot-starter-web`, `spring-boot-starter-validation`, `spring-boot-starter-aspectj`, 내장 Tomcat, Java `HttpClient`
-- 2026-08-09 전체 테스트 성공: 39개 실행, 실패·오류·건너뜀 0개
+- 2026-08-09 전체 테스트 성공: 45개 실행, 실패·오류·건너뜀 0개
 - `BeanDestructionScopeTest`: Singleton·Prototype의 생성 횟수, 참조 동일성, 컨텍스트 종료 후 소멸 콜백 횟수를 검증한다.
 - `ContainerLifecycleIntegrationTest`: BeanDefinition 등록부터 의존 Bean 우선 생성, 초기화, Singleton 공개·반복 조회, 컨텍스트 종료 시 소멸까지 전체 이벤트 순서를 검증한다.
 - `HttpRequestResponseBoundaryTest`: 실제 임의 포트 서버에 같은 경로의 GET·POST·PUT 요청을 보내 메서드·본문에 따른 상태 코드와 응답 본문 차이를 검증한다.
@@ -165,12 +174,21 @@ JDK Dynamic Proxy와 CGLIB (`pending`)
 - `ArgumentResolverMessageConverterTest`: 경로 변수·요청 파라미터·JSON 본문의 정상 인자 준비와 응답 JSON 변환, 세 가지 인자 준비 실패 시 Controller 호출 중단을 검증한다.
 - `ValidationExceptionAdviceTest`: 경로 변수 타입 불일치·DTO 검증 위반·비즈니스 예외의 Controller 진입 여부와 `@RestControllerAdvice`가 만든 상태 코드·오류 본문을 검증한다.
 - `FilterInterceptorAopBoundaryTest`: 정상 요청·Controller 예외·Filter 예외에서 Filter·Interceptor·AOP·Controller·Advice의 이벤트 순서와 예외 전달 범위를 검증한다.
+- `JdkDynamicProxyCglibTest`: JDK Dynamic Proxy·CGLIB의 런타임 타입과 원본 호출 위임, 구현 클래스 캐스팅, `final` 클래스·메서드 제약, `proceed()` 없는 Advice의 원본 호출 차단을 검증한다.
 
 ## 다음 행동
 
-1. `AOP-01` 시작 시 인터페이스 기반 Bean과 구체 클래스 기반 Bean의 프록시 런타임 타입을 먼저 예측한다.
-2. JDK Dynamic Proxy와 CGLIB 프록시가 호출을 원본 객체에 위임하는 경로를 assertion으로 비교한다.
-3. 두 프록시 방식의 타입 캐스팅·final 제약·주입 타입 차이를 실행 결과로 설명한다.
+1. Advice가 `invocation.proceed()`를 호출하는 경우와 호출하지 않고 값을 반환하는 경우를 비교한다.
+2. `proceed()`가 다음 Advice 또는 원본 target 호출로 진행시키는 역할을 이벤트와 반환값 assertion으로 확인한다.
+3. 호출 위임을 다시 설명해 `AOP-01` 완료 기준을 충족하면 별도 세션으로 끊지 않고 같은 세션에서 `AOP-02`를 바로 시작한다.
+4. `AOP-01` 복습이 충분하지 않으면 `needs_review`를 유지하고 `AOP-02`는 시작하지 않는다.
+
+## 다음 세션 운영 합의
+
+- 사용자 요청: 다음 강의에서 `AOP-01` 복습과 `AOP-02` 학습을 함께 진행한다.
+- 선수 항목 영향: `AOP-02`의 선수 항목은 `AOP-01 completed`이므로, 같은 세션의 앞부분에서 호출 위임 재설명과 복습 검증을 먼저 통과해야 한다.
+- 진행 순서: `AOP-01 proceed 복습 → 완료 판단 → 통과 시 즉시 AOP-02 진단·실험`.
+- 순서 변경 이유: 복습과 연결 주제를 별도 세션으로 분리하지 않고 같은 강의 안에서 연속해서 학습하겠다는 사용자의 명시적 요청.
 
 ## 다음 세션 시작 요청
 
@@ -178,10 +196,11 @@ JDK Dynamic Proxy와 CGLIB (`pending`)
 AGENTS.md, ROADMAP_DETAIL.md, CURRENT.md를 모두 읽고,
 현재 roadmap item, 선수 항목, 오늘의 핵심 개념,
 최소 실험과 완료 기준을 먼저 알려 줘.
-`MVC-05 Filter, Interceptor, AOP 경계`는 completed 상태야.
-다음 순서인 `AOP-01 JDK Dynamic Proxy와 CGLIB`를 시작해 줘.
-인터페이스 기반 프록시와 클래스 기반 프록시의 런타임 타입과 호출 위임을 먼저 예측하게 하고,
-두 프록시 방식의 차이와 제약을 비교하는 최소 실험을 준비해 줘.
+`AOP-01 JDK Dynamic Proxy와 CGLIB`는 needs_review 상태야.
+`invocation.proceed()`를 호출하는 Advice와 호출하지 않는 Advice의 원본 target 실행 여부를 먼저 복습해 줘.
+반환값과 target 이벤트 assertion으로 호출 위임을 다시 검증하고,
+학습자가 호출 경로를 재설명한 뒤에만 다음 순서인 `AOP-02 Advice 적용과 self-invocation`으로 이동해 줘.
+복습을 통과하면 세션을 종료하지 말고 같은 강의에서 바로 `AOP-02`의 사전 개념 설명, 진단, 최소 실험까지 진행해 줘.
 문서에 지정되지 않은 다음 주제를 임의로 추가하지 마.
 테스트 보일러플레이트는 제공하고 실행 순서 예측과 assertion에 집중시켜 줘.
 ```

@@ -10,3 +10,4 @@
 | 2026-07-23 | Spring이 Reflection으로 수집한 생성자·매개변수 정보는 Bean 생성 및 의존성 연결 흐름과 어떻게 이어지는가? | Container·Reflection | 생성자 매개변수 타입 조회와 의존 객체 우선 생성 순서를 분리해 검증 | 해결 (2026-07-27) |
 | 2026-07-27 | Spring 내부에서 생성자 선택, 매개변수 의존성 해결, 실제 생성자 호출은 어떤 클래스와 메서드가 담당하는가? | Container 내부 구현 | 현재 Spring 버전의 내부 호출 경로를 소스와 디버거로 추적 | 대기 |
 | 2026-07-28 | 여러 BeanPostProcessor의 정렬 순서에 따라 초기화 콜백 전후의 관찰 순서는 어떻게 달라지는가? | Container·Bean lifecycle | 로드맵 순서를 유지하고 후속 복습 실험에서 `PriorityOrdered`·`Ordered`·일반 후처리기 순서를 비교 | 대기 |
+| 2026-08-09 | `invocation.proceed()`를 호출하지 않는 Advice에서 원본 target 메서드와 프록시 반환값은 어떻게 되는가? | AOP-01 호출 위임 | 차단 Advice의 반환값과 target 이벤트를 assertion으로 검증하고 호출 경로 재설명 | 복습 중 |
