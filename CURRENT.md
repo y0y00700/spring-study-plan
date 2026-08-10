@@ -1,21 +1,21 @@
 # Current Learning Context
 
-마지막 갱신일: 2026-08-09
+마지막 갱신일: 2026-08-11
 
 ## 현재 단계
 
-AOP/TX 진행 중 — 트랜잭션 시작과 스레드 연결 Connection 실험을 완료하고 flush·commit·rollback 주제로 이동할 단계
+AOP/TX 진행 중 — flush와 commit을 분리하고 정상 반환·RuntimeException 경로의 최종 DB 상태를 검증한 단계
 
 ## 현재 주제
 
-트랜잭션 시작과 Connection (`completed`)
+flush, commit, rollback (`completed`)
 
 ## 로드맵 진행 위치
 
 - 상세 기준: `ROADMAP_DETAIL.md`
-- 최근 완료 항목: `TX-01 트랜잭션 시작과 Connection`
+- 최근 완료 항목: `TX-02 flush, commit, rollback`
 - 현재 진행 항목: 없음
-- 다음 진행 항목: `TX-02 flush, commit, rollback`
+- 다음 진행 항목: `TX-03 rollback 규칙과 readOnly`
 - 진행 순서: `CON` 완료 후 `WEB → MVC → AOP/TX → JPA → TST/OPS → CAP`
 
 ## 설명할 수 있게 된 것
@@ -144,6 +144,13 @@ AOP/TX 진행 중 — 트랜잭션 시작과 스레드 연결 Connection 실험�
 - target 메서드 안에서는 트랜잭션 활성 상태와 DataSource 자원 연결 상태가 모두 `true`였고, `DataSourceUtils`로 두 번 얻은 Connection 참조가 같았다.
 - `@Transactional` 메서드 호출 전과 반환 후에는 트랜잭션 활성 상태가 `false`였으므로 트랜잭션 경계가 프록시 호출 내부에 한정됨을 확인했다.
 - 같은 스레드의 Repository나 `JdbcTemplate`은 Connection을 매개변수로 전달받지 않아도 `DataSourceUtils`를 통해 현재 트랜잭션에 연결된 자원을 찾을 수 있다.
+- `persist()`는 엔티티를 영속성 컨텍스트에서 관리하게 하지만, 이번 수동 ID 실험에서는 그 호출만으로 INSERT SQL이 실행되지 않았다.
+- `flush()`는 영속성 컨텍스트의 변경을 DB에 SQL로 동기화하지만 DB 트랜잭션을 최종 확정하지는 않는다.
+- flush 후에는 현재 트랜잭션의 같은 Connection에서 INSERT 결과를 관찰할 수 있지만, `READ_COMMITTED`의 별도 물리 Connection에서는 미커밋 변경을 관찰할 수 없다.
+- 정상 반환 뒤 commit되면 flush로 실행된 INSERT가 최종 DB 상태에 남고, `RuntimeException` 뒤 rollback되면 같은 SQL이 이미 실행됐어도 최종 DB 상태에는 남지 않는다.
+- rollback은 과거의 SQL 실행 사실을 없애는 것이 아니라 현재 트랜잭션의 미완료 변경을 최종 반영하지 않고 폐기한다.
+- 별도 Connection에서 미커밋 행이 보이지 않는 직접 원인은 스레드가 다르기 때문이 아니라 `READ_COMMITTED` 격리 수준에서 다른 트랜잭션의 미커밋 변경을 읽을 수 없기 때문이다.
+- `EntityManager.find()`는 1차 캐시에서 엔티티를 반환할 수 있으므로, 그 결과만으로 INSERT SQL 실행 여부를 증명할 수 없다.
 
 ## 이번 실험에서 확인한 것
 
@@ -170,20 +177,25 @@ AOP/TX 진행 중 — 트랜잭션 시작과 스레드 연결 Connection 실험�
 - `TransactionStartConnectionTest`에서 호출 전 `active=false`, target 내부 `active=true`·`resourceBound=true`·두 Connection 참조 동일, 호출 후 `active=false`를 assertion으로 검증했다.
 - 프록시·`TransactionInterceptor`·`DataSourceTransactionManager`의 책임을 나누어 재설명해 `TX-01` 완료 기준을 충족했다.
 - `TransactionStartConnectionTest` 1개를 포함한 전체 테스트 48개가 성공했다.
+- `FlushCommitRollbackTest`에서 `persist` 직후와 명시적 flush 직후를 비교해 같은 Connection의 행 개수가 `0 → 1`이 되는 것을 검증했다.
+- flush 뒤 트랜잭션 완료 전에는 `READ_COMMITTED`의 별도 Connection에서 행 개수가 0이고, 정상 반환 후에는 1, `RuntimeException`으로 rollback된 뒤에는 0인 것을 검증했다.
+- SQL 실행과 최종 DB 반영이 서로 다른 사건인 이유와 rollback 전후의 관찰 차이를 재설명해 `TX-02` 완료 기준을 충족했다.
+- `FlushCommitRollbackTest` 2개를 포함한 전체 테스트 50개가 성공했다.
 
 ## 아직 실험으로 검증하지 못한 것
 
 - Spring 내부에서 생성자 선택·매개변수 의존성 해결·생성자 호출을 담당하는 실제 클래스와 메서드
 - `@Transactional` self-invocation이 실제 트랜잭션 활성 상태에 미치는 영향
 - JPA, Hibernate, Spring Data JPA의 역할 차이
-- 영속성 컨텍스트와 flush 시점
+- ID 생성 전략에 따라 INSERT 실행 시점이 달라지는 경우
+- Spring Data JPA `save()`가 `persist()`와 `merge()` 중 하나를 선택하는 기준
 
 ## 현재 실습 환경
 
 - `labs/spring-lab`: Java 17, Spring Boot 4.1.0, Gradle Wrapper 9.5.1
 - 테스트용 웹 환경: `spring-boot-starter-web`, `spring-boot-starter-validation`, `spring-boot-starter-aspectj`, 내장 Tomcat, Java `HttpClient`
-- 테스트용 트랜잭션 환경: Spring JDBC, H2 인메모리 DB, `DataSourceTransactionManager`
-- 2026-08-09 전체 테스트 성공: 48개 실행, 실패·오류·건너뜀 0개
+- 테스트용 트랜잭션 환경: Spring JDBC, Spring Data JPA·Hibernate, H2 인메모리 DB, `DataSourceTransactionManager`
+- 2026-08-11 전체 테스트 성공: 50개 실행, 실패·오류·건너뜀 0개
 - `BeanDestructionScopeTest`: Singleton·Prototype의 생성 횟수, 참조 동일성, 컨텍스트 종료 후 소멸 콜백 횟수를 검증한다.
 - `ContainerLifecycleIntegrationTest`: BeanDefinition 등록부터 의존 Bean 우선 생성, 초기화, Singleton 공개·반복 조회, 컨텍스트 종료 시 소멸까지 전체 이벤트 순서를 검증한다.
 - `HttpRequestResponseBoundaryTest`: 실제 임의 포트 서버에 같은 경로의 GET·POST·PUT 요청을 보내 메서드·본문에 따른 상태 코드와 응답 본문 차이를 검증한다.
@@ -198,19 +210,20 @@ AOP/TX 진행 중 — 트랜잭션 시작과 스레드 연결 Connection 실험�
 - `JdkDynamicProxyCglibTest`: JDK Dynamic Proxy·CGLIB의 런타임 타입과 원본 호출 위임, 구현 클래스 캐스팅, `final` 클래스·메서드 제약, `proceed()` 없는 Advice의 원본 호출 차단을 검증한다.
 - `SelfInvocationAdviceTest`: 외부 `inner()` 호출과 같은 target 내부의 `this.inner()` 호출에서 Pointcut·Advice 적용 여부와 원본 메서드 실행 이벤트를 비교한다.
 - `TransactionStartConnectionTest`: 트랜잭션 호출 전·내부·반환 후 활성 상태, DataSource 자원 연결 상태와 같은 트랜잭션의 Connection 참조 동일성을 검증한다.
+- `FlushCommitRollbackTest`: 명시적 flush 전후의 같은 Connection 행 개수, 완료 전 별도 Connection의 가시성, 정상 commit과 RuntimeException rollback 뒤 최종 DB 상태를 검증한다.
 
 ## 다음 행동
 
-1. SQL 실행, flush, DB commit을 서로 다른 사건으로 구분하는 사전 개념을 설명한다.
-2. 명시적 flush 전후와 트랜잭션 완료 전후의 SQL 실행 및 DB 관찰 결과를 예측한다.
-3. 정상 반환과 예외 경로의 DB 상태를 관찰 가능한 assertion으로 비교한다.
-4. SQL이 실행됐다는 사실만으로 최종 commit을 단정할 수 없는 이유를 재설명한다.
+1. checked exception과 runtime exception의 기본 rollback 규칙을 실행 전에 예측한다.
+2. `rollbackFor` 같은 명시적 설정이 기본 규칙을 어떻게 바꾸는지 DB 상태 assertion으로 비교한다.
+3. `readOnly`가 강제 불변 규칙인지 최적화 힌트인지 현재 환경에서 관찰한다.
+4. 예외 발생 사실만으로 rollback을 단정할 수 없는 이유를 규칙과 실행 경로로 재설명한다.
 
 ## 다음 세션 준비
 
-- `TX-02`의 선수 항목인 `TX-01`은 트랜잭션 활성 상태·스레드 연결 자원·Connection 동일성 실험 및 호출 경로 재설명을 통해 완료했다.
-- 다음 세션에서는 로드맵 순서대로 `TX-02 flush, commit, rollback`만 시작한다.
-- 실험 보일러플레이트는 제공하고, 학습자는 실행 전 SQL 실행 시점과 최종 DB 상태를 예측하고 핵심 assertion을 작성한다.
+- `TX-03`의 선수 항목인 `TX-02`는 flush 전후·트랜잭션 완료 전후의 DB 상태 assertion과 실행 경로 재설명을 통해 완료했다.
+- 다음 세션에서는 로드맵 순서대로 `TX-03 rollback 규칙과 readOnly`만 시작한다.
+- 실험 보일러플레이트는 제공하고, 학습자는 실행 전 예외 유형·설정별 rollback 여부와 `readOnly` 결과를 예측하고 핵심 assertion을 작성한다.
 
 ## 다음 세션 시작 요청
 
@@ -218,9 +231,9 @@ AOP/TX 진행 중 — 트랜잭션 시작과 스레드 연결 Connection 실험�
 AGENTS.md, ROADMAP_DETAIL.md, CURRENT.md를 모두 읽고,
 현재 roadmap item, 선수 항목, 오늘의 핵심 개념,
 최소 실험과 완료 기준을 먼저 알려 줘.
-`TX-01 트랜잭션 시작과 Connection`까지 completed 상태야.
-다음 순서인 `TX-02 flush, commit, rollback`의 사전 개념 설명과 진단부터 시작해 줘.
-flush와 commit 시점을 분리하고 정상 반환·예외 전후의 SQL 실행과 최종 DB 상태를 비교하는 최소 실험을 준비하되,
+`TX-02 flush, commit, rollback`까지 completed 상태야.
+다음 순서인 `TX-03 rollback 규칙과 readOnly`의 사전 개념 설명과 진단부터 시작해 줘.
+checked exception·runtime exception·명시적 rollback 설정의 최종 DB 상태와 `readOnly` 동작을 비교하는 최소 실험을 준비하되,
 실행 전에 학습자가 결과와 이유를 예측하고 핵심 assertion을 작성하게 해 줘.
 문서에 지정되지 않은 다음 주제를 임의로 추가하지 마.
 테스트 보일러플레이트는 제공하고 실행 순서 예측과 assertion에 집중시켜 줘.

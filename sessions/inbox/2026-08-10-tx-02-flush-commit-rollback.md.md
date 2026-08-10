@@ -3,7 +3,7 @@ date: 2026-08-10
 roadmap_item: "TX-02 flush, commit, rollback"
 completion_status: completed
 recommended_next: "TX-03 rollback 규칙과 readOnly"
-processed: false
+processed: true
 environment_mode: restricted
 ---
 
@@ -109,4 +109,4 @@ Spring Data JPA save()가 persist()와 merge() 중 하나를 선택하는 기준
 TX-03 rollback 규칙과 readOnly
 recommended_next는 제안이며 확정 진도가 아니다. 쓰기 가능 환경에서 이 세션의 테스트 결과와 roadmap 완료 기준을 다시 확인한 뒤 CURRENT.md에 반영한다.
 
-집 PC에서 inbox 정리와 테스트 검증이 끝나기 전까지 `CURRENT.md`의 확정 진도는 기존 상태로 유지됩니다.
+2026-08-11 쓰기 가능 환경에서 전체 테스트 50개 성공을 확인한 뒤 `CURRENT.md`와 관련 문서에 반영했습니다.

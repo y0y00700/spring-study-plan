@@ -10,10 +10,10 @@ Spring 개념을 격리해 검증하는 실험 코드를 둡니다.
 - Spring Boot 4.1.0
 - Gradle Wrapper 9.5.1
 - 테스트 웹 환경: `spring-boot-starter-web`, `spring-boot-starter-validation`, `spring-boot-starter-aspectj`, 내장 Tomcat, Java `HttpClient`
-- 테스트 트랜잭션 환경: Spring JDBC, H2 인메모리 DB, `DataSourceTransactionManager`
+- 테스트 트랜잭션 환경: Spring JDBC, Spring Data JPA·Hibernate, H2 인메모리 DB, `DataSourceTransactionManager`
 - 테스트 실행: `labs/spring-lab`에서 `.\gradlew.bat test`
 
-2026-08-09 기준 전체 테스트 48개가 성공했습니다. 실패·오류·건너뜀 테스트는 없습니다.
+2026-08-11 기준 전체 테스트 50개가 성공했습니다. 실패·오류·건너뜀 테스트는 없습니다.
 
 - `SpringLabApplicationTests`: Spring 컨텍스트 로딩
 - `SingletonSharedStateTest`: 메서드 인자로 같은 변경 가능한 리스트를 공유할 때 호출 결과가 간섭하는지 검증
@@ -38,6 +38,7 @@ Spring 개념을 격리해 검증하는 실험 코드를 둡니다.
 - `JdkDynamicProxyCglibTest`: JDK Dynamic Proxy·CGLIB의 런타임 타입과 원본 호출 위임, 구현 클래스 캐스팅, `final` 클래스·메서드 제약, `proceed()` 없는 Advice의 원본 호출 차단을 검증
 - `SelfInvocationAdviceTest`: 외부 `inner()` 호출과 `outer()` 내부의 `this.inner()` 호출에서 Advice 적용 여부와 target 메서드 실행 이벤트 비교
 - `TransactionStartConnectionTest`: `@Transactional` 호출 전·내부·반환 후의 활성 상태, 스레드에 연결된 DataSource 자원과 같은 트랜잭션의 Connection 참조 동일성 검증
+- `FlushCommitRollbackTest`: 명시적 flush 전후의 같은 Connection 행 개수, 완료 전 별도 Connection의 가시성, 정상 commit과 RuntimeException rollback 뒤 최종 DB 상태 검증
 
 ```text
 spring-lab/src/test/java/com/study/springlab/
@@ -89,7 +90,8 @@ spring-lab/src/test/java/aop/
 └─ SelfInvocationAdviceTest.java
 
 spring-lab/src/test/java/transaction/
-└─ TransactionStartConnectionTest.java
+├─ TransactionStartConnectionTest.java
+└─ FlushCommitRollbackTest.java
 ```
 
 모든 실험에는 다음 내용을 남깁니다.

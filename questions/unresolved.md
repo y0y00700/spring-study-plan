@@ -5,9 +5,11 @@
 | 날짜 | 질문 | 관련 주제 | 다음 행동 | 상태 |
 |---|---|---|---|---|
 | 2026-07-22 | ApplicationContext와 BeanFactory의 책임은 정확히 어떻게 다른가? | Container | 같은 Singleton을 두 조회 경로로 비교하고 역할을 분리해 설명 | 해결 (2026-07-26) |
-| 2026-07-22 | flush와 commit은 어떤 상황에서 분리되어 발생하는가? | JPA·Transaction | `TX-02`에서 SQL 실행 시점과 최종 DB 상태를 분리해 검증 | 다음 항목 |
+| 2026-07-22 | flush와 commit은 어떤 상황에서 분리되어 발생하는가? | JPA·Transaction | `TX-02`에서 SQL 실행 시점과 최종 DB 상태를 분리해 검증 | 해결 (2026-08-10) |
 | 2026-07-23 | 생성자 주입으로 두 구현체를 교체하는 최소 테스트가 예상대로 통과하고, 잘못된 기대값에서는 실패하는가? | Java·DI | 두 구현체의 반환값과 지역변수 재대입 실험으로 확인 | 해결 (2026-07-26) |
 | 2026-07-23 | Spring이 Reflection으로 수집한 생성자·매개변수 정보는 Bean 생성 및 의존성 연결 흐름과 어떻게 이어지는가? | Container·Reflection | 생성자 매개변수 타입 조회와 의존 객체 우선 생성 순서를 분리해 검증 | 해결 (2026-07-27) |
 | 2026-07-27 | Spring 내부에서 생성자 선택, 매개변수 의존성 해결, 실제 생성자 호출은 어떤 클래스와 메서드가 담당하는가? | Container 내부 구현 | 현재 Spring 버전의 내부 호출 경로를 소스와 디버거로 추적 | 대기 |
 | 2026-07-28 | 여러 BeanPostProcessor의 정렬 순서에 따라 초기화 콜백 전후의 관찰 순서는 어떻게 달라지는가? | Container·Bean lifecycle | 로드맵 순서를 유지하고 후속 복습 실험에서 `PriorityOrdered`·`Ordered`·일반 후처리기 순서를 비교 | 대기 |
 | 2026-08-09 | `invocation.proceed()`를 호출하지 않는 Advice에서 원본 target 메서드와 프록시 반환값은 어떻게 되는가? | AOP-01 호출 위임 | 차단 Advice의 반환값과 target 이벤트를 assertion으로 검증하고 호출 경로 재설명 | 해결 (2026-08-09) |
+| 2026-08-10 | ID 생성 전략에 따라 `persist()` 뒤 INSERT SQL 실행 시점은 어떻게 달라지는가? | JPA-03·JPA-04 | 로드맵 순서를 유지하고 IDENTITY와 SEQUENCE·수동 ID의 persist·flush 전후 SQL 시점을 비교 | 대기 |
+| 2026-08-10 | Spring Data JPA `save()`는 어떤 기준으로 `persist()`와 `merge()`를 선택하는가? | JPA-01·JPA-03 | Repository 구현의 새 엔티티 판별 기준과 실제 호출 경로를 비교 | 대기 |
